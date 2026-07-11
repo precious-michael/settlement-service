@@ -1,0 +1,20 @@
+CREATE TABLE transactions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    bank_statement_id BIGINT NOT NULL,
+    account_id BIGINT NOT NULL,
+    transaction_date DATE NOT NULL,
+    value_date DATE NULL,
+    narration TEXT NULL,
+    reference_number VARCHAR(255) NULL,
+    debit DECIMAL(19,4) NOT NULL DEFAULT 0,
+    credit DECIMAL(19,4) NOT NULL DEFAULT 0,
+    balance DECIMAL(19,4) NULL,
+    product_type VARCHAR(30) NULL,
+    status VARCHAR(30) NOT NULL DEFAULT 'UNRESOLVED',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_transactions_bank_statement FOREIGN KEY (bank_statement_id) REFERENCES bank_statements (id),
+    CONSTRAINT fk_transactions_account FOREIGN KEY (account_id) REFERENCES accounts (id),
+    KEY idx_transactions_bank_statement_id (bank_statement_id),
+    KEY idx_transactions_status (status),
+    UNIQUE KEY uk_transactions_account_reference (account_id, reference_number)
+);

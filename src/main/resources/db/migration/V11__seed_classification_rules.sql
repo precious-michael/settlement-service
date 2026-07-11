@@ -1,0 +1,5 @@
+INSERT INTO classification_rules (regex_pattern, product_type, account_id, created_at) VALUES
+    ('.*CARD SETTLEMENT.*', 'CARD_SETTLEMENT', NULL, CURRENT_TIMESTAMP),
+    ('.*PAYROLL.*', 'PAYROLL', NULL, CURRENT_TIMESTAMP),
+    ('.*TRANSFER.*', 'TRANSFER', NULL, CURRENT_TIMESTAMP),
+    ('.*LOAN REPAYMENT.*', 'LOAN_REPAYMENT', NULL, CURRENT_TIMESTAMP);

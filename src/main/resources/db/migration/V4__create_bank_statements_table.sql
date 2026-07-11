@@ -1,0 +1,20 @@
+CREATE TABLE bank_statements (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    account_id BIGINT NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    file_hash VARCHAR(64) NOT NULL,
+    upload_date DATETIME NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'PROCESSING',
+    total_entries INT DEFAULT 0,
+    processed_entries INT DEFAULT 0,
+    statement_period_start DATE NULL,
+    statement_period_end DATE NULL,
+    currency VARCHAR(10) NULL,
+    opening_balance DECIMAL(19,4) NULL,
+    closing_balance DECIMAL(19,4) NULL,
+    error_message TEXT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_bank_statements_account FOREIGN KEY (account_id) REFERENCES accounts (id),
+    UNIQUE KEY uk_bank_statements_account_file_hash (account_id, file_hash),
+    KEY idx_bank_statements_status (status)
+);

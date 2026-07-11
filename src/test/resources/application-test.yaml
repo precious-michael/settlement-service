@@ -1,0 +1,19 @@
+# Fallback test config — used when the "test" profile is active
+# (-Dspring.profiles.active=test). Points at a persistent local schema instead of a
+# disposable Testcontainers instance, so tests still run if Docker is ever unavailable.
+# The default (no profile set) uses Testcontainers via TestcontainersConfiguration — keep
+# that as the normal path; this is the deliberate fallback, not a stopgap to delete.
+spring:
+  application:
+    name: settlement-service
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/settlement_service_test?createDatabaseIfNotExist=true&autoReconnect=true&serverTimezone=UTC
+    username: settlement
+    password: settlement
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
