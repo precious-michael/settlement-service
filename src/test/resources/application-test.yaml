@@ -1,8 +1,7 @@
 # Fallback test config — used when the "test" profile is active
 # (-Dspring.profiles.active=test). Points at a persistent local schema instead of a
 # disposable Testcontainers instance, so tests still run if Docker is ever unavailable.
-# The default (no profile set) uses Testcontainers via TestcontainersConfiguration — keep
-# that as the normal path; this is the deliberate fallback, not a stopgap to delete.
+# The default (no profile set) uses Testcontainers via TestcontainersConfiguration
 spring:
   application:
     name: settlement-service
