@@ -17,6 +17,14 @@ spring:
 server:
   port: 8080
 
+jwt:
+  secret: ${JWT_SECRET:F1mQ3r8+L4YgD9qQbq1F9i3mGQm1m2X7s8P0n4X6k2Q=}
+  expiration-minutes: ${JWT_EXPIRATION_MINUTES:60}
+
+admin:
+  seed-username: ${ADMIN_USERNAME:admin}
+  seed-password: ${ADMIN_PASSWORD:password}
+
 DB_HOST: 127.0.0.1
 DB_USERNAME: settlement
 DB_PASSWORD: settlement
