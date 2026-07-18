@@ -43,7 +43,7 @@ public class SecurityConfig {
                         .anyRequest().authenticated())
                 .exceptionHandling(handling -> handling
                         .authenticationEntryPoint((request, response, ex) -> writeError(
-                                response, HttpStatus.UNAUTHORIZED, "Missing or invalid authentication token"))
+                                response, HttpStatus.UNAUTHORIZED, "You are not logged in"))
                         .accessDeniedHandler((request, response, ex) -> writeError(
                                 response, HttpStatus.FORBIDDEN, "You do not have permission to perform this action")))
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

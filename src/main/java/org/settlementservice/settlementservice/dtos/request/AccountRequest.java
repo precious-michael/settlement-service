@@ -6,6 +6,8 @@ import jakarta.validation.constraints.Pattern;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.math.BigDecimal;
+
 @Getter
 @Setter
 public class AccountRequest {
@@ -18,4 +20,8 @@ public class AccountRequest {
 
         @NotNull(message = "Settlement bank is required")
         private Long bankId;
+
+        private BigDecimal currentOpeningBalance;
+
+        private String description;
 }

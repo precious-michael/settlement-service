@@ -12,6 +12,8 @@ import lombok.Getter;
 import lombok.Setter;
 import org.settlementservice.settlementservice.enums.AccountStatus;
 
+import java.math.BigDecimal;
+
 @Getter
 @Setter
 @Entity
@@ -31,4 +33,10 @@ public class Account extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)
     private AccountStatus status = AccountStatus.ACTIVE;
+
+    @Column(name = "opening_balance", precision = 19, scale = 4)
+    private BigDecimal currentOpeningBalance;
+
+    @Column(length = 500)
+    private String description;
 }

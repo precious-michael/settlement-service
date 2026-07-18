@@ -45,9 +45,6 @@ public class SettlementReport extends BaseEntity {
     @Column(name = "total_entries")
     private Integer totalEntries = 0;
 
-    @Column(name = "processed_entries")
-    private Integer processedEntries = 0;
-
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 }

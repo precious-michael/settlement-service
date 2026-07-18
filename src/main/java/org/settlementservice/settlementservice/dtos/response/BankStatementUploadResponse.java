@@ -6,9 +6,8 @@ import org.settlementservice.settlementservice.enums.BatchStatus;
 
 @Getter
 @Setter
-public class BankStatementUploadResponse{
+public class BankStatementUploadResponse {
     private Long id;
     private String fileName;
     private BatchStatus status;
-    private boolean duplicate;
 }

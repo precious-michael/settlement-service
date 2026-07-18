@@ -6,7 +6,6 @@ CREATE TABLE settlement_reports (
     status VARCHAR(30) NOT NULL DEFAULT 'PROCESSING',
     upload_date DATETIME NOT NULL,
     total_entries INT DEFAULT 0,
-    processed_entries INT DEFAULT 0,
     error_message TEXT NULL,
     created_at DATETIME NOT NULL,
     CONSTRAINT fk_settlement_reports_transaction FOREIGN KEY (transaction_id) REFERENCES transactions (id),

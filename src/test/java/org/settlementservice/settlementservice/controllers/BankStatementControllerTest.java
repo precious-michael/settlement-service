@@ -40,38 +40,38 @@ class BankStatementControllerTest extends AbstractControllerTest {
     }
 
     @Test
-    void upload_newFile_returns201NotDuplicate() throws Exception {
+    void upload_newFile_returns201() throws Exception {
         MockMultipartFile file = new MockMultipartFile("file", "statement1.csv", "text/csv", "row one\nrow two".getBytes());
 
         mockMvc.perform(multipart("/api/bank-statements/upload")
                         .file(file)
                         .param("accountId", accountId.toString())
+                        .param("openingBalance", "100000")
                         .header("Authorization", bearer(adminToken)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.message").value("Bank statement uploaded successfully"))
                 .andExpect(jsonPath("$.data.fileName").value("statement1.csv"))
-                .andExpect(jsonPath("$.data.status").value("PENDING"))
-                .andExpect(jsonPath("$.data.duplicate").value(false));
+                .andExpect(jsonPath("$.data.status").value("PENDING"));
     }
 
     @Test
-    void upload_sameFileTwiceForSameAccount_secondIsDuplicate() throws Exception {
+    void upload_sameFileTwiceForSameAccount_secondReturns409() throws Exception {
         MockMultipartFile file = new MockMultipartFile("file", "statement1.csv", "text/csv", "same bytes".getBytes());
 
         mockMvc.perform(multipart("/api/bank-statements/upload")
                         .file(file)
                         .param("accountId", accountId.toString())
+                        .param("openingBalance", "100000")
                         .header("Authorization", bearer(adminToken)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.data.duplicate").value(false));
+                .andExpect(status().isCreated());
 
         mockMvc.perform(multipart("/api/bank-statements/upload")
                         .file(file)
                         .param("accountId", accountId.toString())
+                        .param("openingBalance", "100000")
                         .header("Authorization", bearer(adminToken)))
-                .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.message").value("This file has already been uploaded for this account"))
-                .andExpect(jsonPath("$.data.duplicate").value(true));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("This file has already been uploaded for account " + accountId));
     }
 
     @Test
@@ -81,6 +81,7 @@ class BankStatementControllerTest extends AbstractControllerTest {
         mockMvc.perform(multipart("/api/bank-statements/upload")
                         .file(file)
                         .param("accountId", accountId.toString())
+                        .param("openingBalance", "100000")
                         .header("Authorization", bearer(reconOfficerToken)))
                 .andExpect(status().isCreated());
     }
@@ -92,6 +93,7 @@ class BankStatementControllerTest extends AbstractControllerTest {
         mockMvc.perform(multipart("/api/bank-statements/upload")
                         .file(emptyFile)
                         .param("accountId", accountId.toString())
+                        .param("openingBalance", "100000")
                         .header("Authorization", bearer(adminToken)))
                 .andExpect(status().isBadRequest());
     }
@@ -103,6 +105,7 @@ class BankStatementControllerTest extends AbstractControllerTest {
         mockMvc.perform(multipart("/api/bank-statements/upload")
                         .file(file)
                         .param("accountId", "999999")
+                        .param("openingBalance", "100000")
                         .header("Authorization", bearer(adminToken)))
                 .andExpect(status().isNotFound());
     }
@@ -113,7 +116,8 @@ class BankStatementControllerTest extends AbstractControllerTest {
 
         mockMvc.perform(multipart("/api/bank-statements/upload")
                         .file(file)
-                        .param("accountId", accountId.toString()))
+                        .param("accountId", accountId.toString())
+                        .param("openingBalance", "100000"))
                 .andExpect(status().isUnauthorized());
     }
 }

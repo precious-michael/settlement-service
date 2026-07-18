@@ -12,6 +12,7 @@ import java.util.Optional;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
 
+    // skip filter if the caller didn't provide it
     @Query("""
             SELECT t FROM Transaction t
             WHERE (:status IS NULL OR t.status = :status)

@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.Setter;
 import org.settlementservice.settlementservice.enums.AccountStatus;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 @Getter
@@ -15,5 +16,7 @@ public class AccountResponse {
     private Long bankId;
     private String bankName;
     private AccountStatus status;
+    private BigDecimal currentOpeningBalance;
+    private String description;
     private Instant createdAt;
 }

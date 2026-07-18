@@ -6,6 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.modelmapper.ModelMapper;
+import org.settlementservice.settlementservice.async.SettlementReportUploadTask;
 import org.settlementservice.settlementservice.dtos.response.SettlementReportUploadResponse;
 import org.settlementservice.settlementservice.enums.BatchStatus;
 import org.settlementservice.settlementservice.exceptions.DuplicateResourceException;
@@ -16,12 +17,16 @@ import org.settlementservice.settlementservice.models.Transaction;
 import org.settlementservice.settlementservice.repositories.SettlementReportRepository;
 import org.settlementservice.settlementservice.repositories.TransactionRepository;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,6 +40,12 @@ class SettlementReportServiceImplTest {
     @Mock
     private TransactionRepository transactionRepository;
 
+    @Mock
+    private SettlementReportUploadTask settlementReportUploadTask;
+
+    @Mock
+    private TransactionTemplate transactionTemplate;
+
     private SettlementReportServiceImpl settlementReportService;
 
     private Transaction transaction;
@@ -42,13 +53,19 @@ class SettlementReportServiceImplTest {
     @BeforeEach
     void setUp() {
         settlementReportService = new SettlementReportServiceImpl(
-                settlementReportRepository, transactionRepository, new ModelMapper());
+                settlementReportRepository, transactionRepository, new ModelMapper(),
+                settlementReportUploadTask, transactionTemplate);
 
         Account account = new Account();
         account.setId(3L);
         transaction = new Transaction();
         transaction.setId(1L);
         transaction.setAccount(account);
+
+        lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(null);
+        });
     }
 
     @Test
@@ -69,7 +86,7 @@ class SettlementReportServiceImplTest {
     }
 
     @Test
-    void upload_transactionAlreadyHasReport_throwsDuplicateResourceException() {
+    void upload_transactionAlreadyHasReport_throwsDuplicateResourceExceptionWithoutSavingOrProcessing() {
         when(transactionRepository.findById(1L)).thenReturn(Optional.of(transaction));
         when(settlementReportRepository.existsByTransactionId(1L)).thenReturn(true);
         MockMultipartFile file = new MockMultipartFile("file", "report.csv", "text/csv", "data".getBytes());
@@ -79,10 +96,11 @@ class SettlementReportServiceImplTest {
                 .hasMessageContaining("1");
 
         verify(settlementReportRepository, never()).save(any());
+        verify(settlementReportUploadTask, never()).process(any(), any(), any());
     }
 
     @Test
-    void upload_newReport_savesPendingBatchLinkedToTransactionAndItsAccount() {
+    void upload_newReport_savesPendingBatchLinkedToTransactionAndTriggersProcessing() {
         when(transactionRepository.findById(1L)).thenReturn(Optional.of(transaction));
         when(settlementReportRepository.existsByTransactionId(1L)).thenReturn(false);
         when(settlementReportRepository.save(any(SettlementReport.class))).thenAnswer(invocation -> {
@@ -97,5 +115,6 @@ class SettlementReportServiceImplTest {
         assertThat(response.getId()).isEqualTo(1L);
         assertThat(response.getFileName()).isEqualTo("report.csv");
         assertThat(response.getStatus()).isEqualTo(BatchStatus.PENDING);
+        verify(settlementReportUploadTask).process(eq(1L), eq("report.csv"), any());
     }
 }

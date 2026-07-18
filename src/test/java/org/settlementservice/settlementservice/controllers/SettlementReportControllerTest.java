@@ -61,6 +61,7 @@ class SettlementReportControllerTest extends AbstractControllerTest {
         String uploadResponse = mockMvc.perform(multipart("/api/bank-statements/upload")
                         .file(file)
                         .param("accountId", String.valueOf(accountId))
+                        .param("openingBalance", "100000")
                         .header("Authorization", bearer(adminToken)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
