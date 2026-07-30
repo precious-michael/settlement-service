@@ -120,13 +120,10 @@ class BankStatementUploadTaskTest {
     }
 
     @Test
-    void process_parseRowErrorsPresent_marksCompletedWithErrorsAndRecordsThem() {
+    void process_parseRowErrorsPresent_failsWholeBatchButStillRecordsRowErrors() {
         BankStatement bankStatement = bankStatement();
         when(bankStatementRepository.findById(1L)).thenReturn(Optional.of(bankStatement));
         when(bankStatementRepository.save(any(BankStatement.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(classificationRuleRepository.findByAccountIdOrAccountIsNull(3L)).thenReturn(List.of());
-        when(transactionRepository.findByAccountIdAndReferenceNumber(any(), any())).thenReturn(Optional.empty());
-        when(classificationMatcher.classify(any(), any())).thenReturn(Optional.empty());
         when(statementFileParserFactory.getParser("statement.xlsx")).thenReturn(parser);
 
         ParsedRow goodRow = transactionRow(3, "REF-002");
@@ -136,10 +133,12 @@ class BankStatementUploadTaskTest {
 
         task.process(1L, "statement.xlsx", "file".getBytes());
 
-        assertThat(bankStatement.getStatus()).isEqualTo(BatchStatus.COMPLETED_WITH_ERRORS);
+        assertThat(bankStatement.getStatus()).isEqualTo(BatchStatus.FAILED);
         assertThat(bankStatement.getTotalEntries()).isEqualTo(2);
+        assertThat(bankStatement.getErrorMessage()).contains("1 row(s) failed to parse");
+        assertThat(bankStatement.getClosingBalance()).isNull();
         verify(bankStatementRowErrorRepository, times(1)).save(any());
-        verify(transactionRepository).saveAll(argThat((List<Transaction> saved) -> saved.size() == 1));
+        verifyNoInteractions(transactionRepository, classificationRuleRepository);
     }
 
     @Test
@@ -196,6 +195,6 @@ class BankStatementUploadTaskTest {
 
     private ParsedRow transactionRow(int rowNumber, String referenceNumber) {
         return new ParsedRow(rowNumber, LocalDate.of(2026, 6, 2), null, "CARD SETTLEMENT",
-                referenceNumber, BigDecimal.ZERO, new BigDecimal("5000"), null);
+                referenceNumber, BigDecimal.ZERO, new BigDecimal("5000"), null, null, null, null, null);
     }
 }

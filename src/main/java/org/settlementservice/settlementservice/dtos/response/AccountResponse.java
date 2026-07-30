@@ -16,7 +16,7 @@ public class AccountResponse {
     private Long bankId;
     private String bankName;
     private AccountStatus status;
-    private BigDecimal currentOpeningBalance;
+    private BigDecimal openingBalance;
     private String description;
     private Instant createdAt;
 }

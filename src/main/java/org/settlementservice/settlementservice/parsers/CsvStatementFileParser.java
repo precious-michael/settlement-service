@@ -23,7 +23,8 @@ import java.util.Set;
  * field reads "Transaction Date" marks the table start; the header block above it — statement
  * period, balances — is skipped without being parsed), read positionally since there's no single
  * consistent header. A settlement report is addressed by header name instead (column order in
- * the file doesn't matter): transaction_date, narration, transaction_reference, debit, credit.
+ * the file doesn't matter): transaction_date, narration, transaction_reference, debit, credit are
+ * required; settlement_date, rrn, stan, terminal_id are read when present but optional.
  */
 @Component
 public class CsvStatementFileParser implements StatementFileParser {
@@ -133,7 +134,7 @@ public class CsvStatementFileParser implements StatementFileParser {
         BigDecimal credit = orZero(parseDecimal(fieldAt(record, 5), "Credit"));
         BigDecimal balance = parseDecimal(fieldAt(record, 6), "Balance");
         return new ParsedRow(rowNumber, transactionDate, valueDate, narration, referenceNumber,
-                debit, credit, balance);
+                debit, credit, balance, null, null, null, null);
     }
 
     private ParsedRow parseSettlementRow(int rowNumber, CSVRecord record) {
@@ -142,8 +143,12 @@ public class CsvStatementFileParser implements StatementFileParser {
         String referenceNumber = requireText(get(record, "transaction_reference"), "transaction_reference");
         BigDecimal debit = orZero(parseDecimal(get(record, "debit"), "debit"));
         BigDecimal credit = orZero(parseDecimal(get(record, "credit"), "credit"));
+        LocalDate settlementDate = parseDate(get(record, "settlement_date"));
+        String rrn = get(record, "rrn");
+        String stan = get(record, "stan");
+        String terminalId = get(record, "terminal_id");
         return new ParsedRow(rowNumber, transactionDate, null, narration, referenceNumber,
-                debit, credit, null);
+                debit, credit, null, settlementDate, rrn, stan, terminalId);
     }
 
     private String fieldAt(CSVRecord record, int index) {

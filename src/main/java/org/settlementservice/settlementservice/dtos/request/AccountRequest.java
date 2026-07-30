@@ -21,7 +21,7 @@ public class AccountRequest {
         @NotNull(message = "Settlement bank is required")
         private Long bankId;
 
-        private BigDecimal currentOpeningBalance;
+        private BigDecimal openingBalance;
 
         private String description;
 }

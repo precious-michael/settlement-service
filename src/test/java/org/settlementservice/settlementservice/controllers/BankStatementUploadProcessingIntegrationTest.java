@@ -94,7 +94,7 @@ class BankStatementUploadProcessingIntegrationTest extends AbstractControllerTes
     }
 
     @Test
-    void upload_workbookWithOneBadRow_marksCompletedWithErrorsAndRecordsRowError() throws Exception {
+    void upload_workbookWithOneBadRow_failsWholeBatchButStillRecordsRowError() throws Exception {
         Long accountId = createAccount("1234567891");
         byte[] workbook = workbook(sheet -> {
             writeTableHeader(sheet, 0);
@@ -114,13 +114,13 @@ class BankStatementUploadProcessingIntegrationTest extends AbstractControllerTes
         long bankStatementId = objectMapper.readTree(response).get("data").get("id").asLong();
 
         BankStatement bankStatement = bankStatementRepository.findById(bankStatementId).orElseThrow();
-        assertThat(bankStatement.getStatus()).isEqualTo(BatchStatus.COMPLETED_WITH_ERRORS);
+        assertThat(bankStatement.getStatus()).isEqualTo(BatchStatus.FAILED);
+        assertThat(bankStatement.getClosingBalance()).isNull();
 
         List<Transaction> transactions = transactionRepository.findAll().stream()
                 .filter(t -> t.getAccount().getId().equals(accountId))
                 .toList();
-        assertThat(transactions).hasSize(1);
-        assertThat(transactions.get(0).getReferenceNumber()).isEqualTo("REF-202");
+        assertThat(transactions).isEmpty();
 
         assertThat(bankStatementRowErrorRepository.findAll().stream()
                 .filter(e -> e.getBankStatement().getId().equals(bankStatementId))

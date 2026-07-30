@@ -25,8 +25,9 @@ import java.util.List;
  * "Transaction Date", with fixed columns: Transaction Date, Value Date, Narration, Reference
  * Number, Debit, Credit, Balance. A settlement report is flatter: row 0 is a label row (not used
  * for lookup — purely documentation, same as the bank statement table is positional), then fixed
- * columns: Transaction Date, Narration, Transaction Reference, Debit, Credit. Only the first
- * sheet is read.
+ * columns: Transaction Date, Narration, Transaction Reference, Debit, Credit, followed by four
+ * optional trailing columns — Settlement Date, RRN, STAN, Terminal ID — read when the cell is
+ * present, left null otherwise. Only the first sheet is read.
  */
 @Component
 public class ExcelStatementFileParser implements StatementFileParser {
@@ -122,7 +123,7 @@ public class ExcelStatementFileParser implements StatementFileParser {
         BigDecimal credit = orZero(parseDecimalCell(row.getCell(5), "Credit"));
         BigDecimal balance = parseDecimalCell(row.getCell(6), "Balance");
         return new ParsedRow(rowNumber, transactionDate, valueDate, narration, referenceNumber,
-                debit, credit, balance);
+                debit, credit, balance, null, null, null, null);
     }
 
     private ParsedRow parseSettlementRow(int rowNumber, Row row) {
@@ -131,8 +132,12 @@ public class ExcelStatementFileParser implements StatementFileParser {
         String referenceNumber = requireText(cellText(row.getCell(2)), "Transaction Reference");
         BigDecimal debit = orZero(parseDecimalCell(row.getCell(3), "Debit"));
         BigDecimal credit = orZero(parseDecimalCell(row.getCell(4), "Credit"));
+        LocalDate settlementDate = parseDateCell(row.getCell(5));
+        String rrn = cellText(row.getCell(6));
+        String stan = cellText(row.getCell(7));
+        String terminalId = cellText(row.getCell(8));
         return new ParsedRow(rowNumber, transactionDate, null, narration, referenceNumber,
-                debit, credit, null);
+                debit, credit, null, settlementDate, rrn, stan, terminalId);
     }
 
     private String requireText(String value, String label) {

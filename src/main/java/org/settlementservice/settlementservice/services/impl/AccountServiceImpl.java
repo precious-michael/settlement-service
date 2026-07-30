@@ -42,7 +42,7 @@ public class AccountServiceImpl implements AccountService {
         account.setAccountNumber(request.getAccountNumber());
         account.setSettlementBank(bank);
         account.setStatus(AccountStatus.ACTIVE);
-        account.setCurrentOpeningBalance(request.getCurrentOpeningBalance());
+        account.setOpeningBalance(request.getOpeningBalance());
         account.setDescription(request.getDescription());
 
         return toResponse(accountRepository.save(account));
@@ -63,8 +63,8 @@ public class AccountServiceImpl implements AccountService {
     public AccountResponse update(Long id, AccountUpdateRequest request) {
         Account account = findAccountOrThrow(id);
         account.setStatus(request.getStatus());
-        if (request.getCurrentOpeningBalance() != null) {
-            account.setCurrentOpeningBalance(request.getCurrentOpeningBalance());
+        if (request.getOpeningBalance() != null) {
+            account.setOpeningBalance(request.getOpeningBalance());
         }
         if (request.getDescription() != null) {
             account.setDescription(request.getDescription());

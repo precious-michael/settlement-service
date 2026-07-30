@@ -25,6 +25,12 @@ admin:
   seed-username: ${ADMIN_USERNAME:admin}
   seed-password: ${ADMIN_PASSWORD:password}
 
+reconciliation:
+  # Max absolute difference between a transaction's net amount and its settlement report's
+  # reported net amount that still counts as a match. 0.00 requires an exact match; a settlement
+  # report outside this band is rejected outright rather than accepted and flagged.
+  tolerance: ${RECONCILIATION_TOLERANCE:0.00}
+
 DB_HOST: 127.0.0.1
 DB_USERNAME: settlement
 DB_PASSWORD: settlement

@@ -128,6 +128,39 @@ class ExcelStatementFileParserTest {
     }
 
     @Test
+    void parseSettlementReport_optionalReconciliationColumnsPresent_arePopulated() {
+        byte[] file = workbook(sheet -> {
+            writeSettlementHeaderRow(sheet, 0);
+            writeSettlementDataRow(sheet, 1, "2026-06-02", "CARD SETTLEMENT", "REF-001", "0", "5000",
+                    "2026-06-04", "RRN123", "STAN456", "TERM01");
+        });
+
+        ParsedFile parsed = parser.parseSettlementReport(file);
+
+        ParsedRow row = parsed.getRows().get(0);
+        assertThat(row.getSettlementDate()).isEqualTo(LocalDate.of(2026, 6, 4));
+        assertThat(row.getRrn()).isEqualTo("RRN123");
+        assertThat(row.getStan()).isEqualTo("STAN456");
+        assertThat(row.getTerminalId()).isEqualTo("TERM01");
+    }
+
+    @Test
+    void parseSettlementReport_optionalReconciliationColumnsAbsent_leavesThemNull() {
+        byte[] file = workbook(sheet -> {
+            writeSettlementHeaderRow(sheet, 0);
+            writeSettlementDataRow(sheet, 1, "2026-06-02", "CARD SETTLEMENT", "REF-001", "0", "5000");
+        });
+
+        ParsedFile parsed = parser.parseSettlementReport(file);
+
+        ParsedRow row = parsed.getRows().get(0);
+        assertThat(row.getSettlementDate()).isNull();
+        assertThat(row.getRrn()).isNull();
+        assertThat(row.getStan()).isNull();
+        assertThat(row.getTerminalId()).isNull();
+    }
+
+    @Test
     void parseSettlementReport_rowMissingNarration_capturesRowErrorWithoutFailingOtherRows() {
         byte[] file = workbook(sheet -> {
             writeSettlementHeaderRow(sheet, 0);

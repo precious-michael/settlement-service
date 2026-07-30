@@ -29,9 +29,10 @@ import java.util.List;
  * thread. Triggered directly from {@code BankStatementServiceImpl} once the upload's own
  * transaction has already committed — not from inside it — so processing never starts before the
  * batch row it depends on is visible. Rows with an already-imported reference number are skipped
- * (not an error); rows the parser couldn't read are recorded individually and don't fail the
- * batch; an unexpected failure while saving the successfully-parsed rows fails the whole batch,
- * same as a single big insert would.
+ * (not an error). Any row the parser couldn't read fails the whole batch outright — row errors are
+ * still recorded individually for visibility, but no transactions are persisted and no closing
+ * balance is computed, since a closing balance computed from an incomplete row set would be wrong
+ * and nothing downstream can tell it apart from a correct one. Fix the file and re-upload.
  */
 @Component
 @RequiredArgsConstructor
@@ -68,13 +69,24 @@ public class BankStatementUploadTask {
 
     private void processFile(BankStatement bankStatement, String fileName, byte[] fileBytes) {
         ParsedFile parsed = statementFileParserFactory.getParser(fileName).parseBankStatement(fileBytes);
-
-        Long accountId = bankStatement.getAccount().getId();
-        List<ClassificationRule> rules = classificationRuleRepository.findByAccountIdOrAccountIsNull(accountId);
+        int totalEntries = parsed.getRows().size() + parsed.getRowErrors().size();
 
         for (RowParseError error : parsed.getRowErrors()) {
             saveRowError(bankStatement, error.getRowNumber(), error.getRawRow(), error.getMessage());
         }
+
+        if (!parsed.getRowErrors().isEmpty()) {
+            bankStatement.setTotalEntries(totalEntries);
+            bankStatement.setStatus(BatchStatus.FAILED);
+            bankStatement.setErrorMessage(parsed.getRowErrors().size()
+                    + " row(s) failed to parse — upload rejected rather than computing a closing balance "
+                    + "from an incomplete row set. Fix the file and re-upload.");
+            bankStatementRepository.save(bankStatement);
+            return;
+        }
+
+        Long accountId = bankStatement.getAccount().getId();
+        List<ClassificationRule> rules = classificationRuleRepository.findByAccountIdOrAccountIsNull(accountId);
 
         List<Transaction> transactions = new ArrayList<>();
         for (ParsedRow row : parsed.getRows()) {
@@ -88,10 +100,9 @@ public class BankStatementUploadTask {
         }
         transactionRepository.saveAll(transactions);
 
-        bankStatement.setTotalEntries(parsed.getRows().size() + parsed.getRowErrors().size());
+        bankStatement.setTotalEntries(totalEntries);
         bankStatement.setClosingBalance(computeClosingBalance(bankStatement.getOpeningBalance(), parsed.getRows()));
-        bankStatement.setStatus(
-                parsed.getRowErrors().isEmpty() ? BatchStatus.COMPLETED : BatchStatus.COMPLETED_WITH_ERRORS);
+        bankStatement.setStatus(BatchStatus.COMPLETED);
         bankStatementRepository.save(bankStatement);
     }
 

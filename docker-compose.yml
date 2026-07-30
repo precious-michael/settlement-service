@@ -18,5 +18,24 @@ services:
       timeout: 5s
       retries: 10
 
+  app:
+    build: .
+    container_name: settlement-service-app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: mysql
+      DB_NAME: settlement_service
+      DB_USERNAME: settlement
+      DB_PASSWORD: settlement
+      JWT_SECRET: F1mQ3r8+L4YgD9qQbq1F9i3mGQm1m2X7s8P0n4X6k2Q=
+      JWT_EXPIRATION_MINUTES: 60
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: password
+    depends_on:
+      mysql:
+        condition: service_healthy
+
 volumes:
   mysql-data:

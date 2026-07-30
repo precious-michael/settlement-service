@@ -8,6 +8,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.settlementservice.settlementservice.enums.BatchStatus;
 import org.settlementservice.settlementservice.models.SettlementReport;
 import org.settlementservice.settlementservice.models.SettlementTransaction;
+import org.settlementservice.settlementservice.models.Transaction;
 import org.settlementservice.settlementservice.exceptions.FileParseException;
 import org.settlementservice.settlementservice.parsers.ParsedFile;
 import org.settlementservice.settlementservice.parsers.ParsedRow;
@@ -17,6 +18,7 @@ import org.settlementservice.settlementservice.parsers.StatementFileParserFactor
 import org.settlementservice.settlementservice.repositories.SettlementReportRepository;
 import org.settlementservice.settlementservice.repositories.SettlementReportRowErrorRepository;
 import org.settlementservice.settlementservice.repositories.SettlementTransactionRepository;
+import org.settlementservice.settlementservice.services.SettlementValidationService;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -50,13 +52,16 @@ class SettlementReportUploadTaskTest {
     @Mock
     private StatementFileParser parser;
 
+    @Mock
+    private SettlementValidationService settlementValidationService;
+
     private SettlementReportUploadTask task;
 
     @BeforeEach
     void setUp() {
         task = new SettlementReportUploadTask(
                 settlementReportRepository, settlementReportRowErrorRepository, settlementTransactionRepository,
-                statementFileParserFactory);
+                statementFileParserFactory, settlementValidationService);
     }
 
     @Test
@@ -85,7 +90,7 @@ class SettlementReportUploadTaskTest {
     }
 
     @Test
-    void process_allRowsSaveSuccessfully_marksCompleted() {
+    void process_allRowsSaveSuccessfully_marksCompletedAndTriggersReconciliation() {
         SettlementReport settlementReport = settlementReport();
         when(settlementReportRepository.findById(1L)).thenReturn(Optional.of(settlementReport));
         when(settlementReportRepository.save(any(SettlementReport.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -101,10 +106,11 @@ class SettlementReportUploadTaskTest {
         verify(settlementTransactionRepository).saveAll(argThat((List<SettlementTransaction> saved) ->
                 saved.size() == 1 && saved.get(0).getTransactionReference().equals("REF-001")));
         verifyNoInteractions(settlementReportRowErrorRepository);
+        verify(settlementValidationService).validateSettlement(1L);
     }
 
     @Test
-    void process_parseRowErrorsPresent_marksCompletedWithErrorsAndRecordsThem() {
+    void process_parseRowErrorsPresent_marksCompletedWithErrorsAndDoesNotReconcile() {
         SettlementReport settlementReport = settlementReport();
         when(settlementReportRepository.findById(1L)).thenReturn(Optional.of(settlementReport));
         when(settlementReportRepository.save(any(SettlementReport.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -120,10 +126,11 @@ class SettlementReportUploadTaskTest {
         assertThat(settlementReport.getTotalEntries()).isEqualTo(2);
         verify(settlementReportRowErrorRepository, times(1)).save(any());
         verify(settlementTransactionRepository).saveAll(argThat((List<SettlementTransaction> saved) -> saved.size() == 1));
+        verifyNoInteractions(settlementValidationService);
     }
 
     @Test
-    void process_saveAllThrowsUnexpectedException_failsWholeBatch() {
+    void process_saveAllThrowsUnexpectedException_failsWholeBatchWithoutReconciling() {
         SettlementReport settlementReport = settlementReport();
         when(settlementReportRepository.findById(1L)).thenReturn(Optional.of(settlementReport));
         when(settlementReportRepository.save(any(SettlementReport.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -137,16 +144,44 @@ class SettlementReportUploadTaskTest {
 
         assertThat(settlementReport.getStatus()).isEqualTo(BatchStatus.FAILED);
         assertThat(settlementReport.getErrorMessage()).isEqualTo("constraint violation");
+        verifyNoInteractions(settlementValidationService);
+    }
+
+    @Test
+    void process_reportedAmountOutsideTolerance_rejectsAndDeletesReportWithoutPersistingOrReconciling() {
+        SettlementReport settlementReport = settlementReport();
+        when(settlementReportRepository.findById(1L)).thenReturn(Optional.of(settlementReport));
+        when(settlementReportRepository.save(any(SettlementReport.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(statementFileParserFactory.getParser("report.csv")).thenReturn(parser);
+
+        // Transaction's net is 5000 (set up in settlementReport()), but this line only reports 4800.
+        ParsedRow row = settlementRow(2, "REF-001", new BigDecimal("4800"));
+        when(parser.parseSettlementReport(any())).thenReturn(new ParsedFile(List.of(row), List.of()));
+
+        task.process(1L, "report.csv", "file".getBytes());
+
+        verify(settlementReportRepository).delete(settlementReport);
+        verify(settlementReportRepository, never()).save(argThat(r -> r.getStatus() == BatchStatus.COMPLETED));
+        verifyNoInteractions(settlementTransactionRepository, settlementValidationService);
     }
 
     private SettlementReport settlementReport() {
         SettlementReport settlementReport = new SettlementReport();
         settlementReport.setId(1L);
+        Transaction transaction = new Transaction();
+        transaction.setId(10L);
+        transaction.setDebit(BigDecimal.ZERO);
+        transaction.setCredit(new BigDecimal("5000"));
+        settlementReport.setTransaction(transaction);
         return settlementReport;
     }
 
     private ParsedRow settlementRow(int rowNumber, String reference) {
+        return settlementRow(rowNumber, reference, new BigDecimal("5000"));
+    }
+
+    private ParsedRow settlementRow(int rowNumber, String reference, BigDecimal credit) {
         return new ParsedRow(rowNumber, LocalDate.of(2026, 6, 2), null, "CARD SETTLEMENT", reference,
-                BigDecimal.ZERO, new BigDecimal("5000"), null);
+                BigDecimal.ZERO, credit, null, null, null, null, null);
     }
 }

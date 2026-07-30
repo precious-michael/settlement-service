@@ -13,7 +13,7 @@ public class AccountUpdateRequest {
         @NotNull(message = "Status is required")
         private AccountStatus status;
 
-        private BigDecimal currentOpeningBalance;
+        private BigDecimal openingBalance;
 
         private String description;
 }

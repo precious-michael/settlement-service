@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.settlementservice.settlementservice.controllers.config.SynchronousAsyncTestConfig;
 import org.settlementservice.settlementservice.dtos.request.AccountRequest;
 import org.settlementservice.settlementservice.enums.BatchStatus;
+import org.settlementservice.settlementservice.enums.TransactionStatus;
 import org.settlementservice.settlementservice.models.SettlementBank;
 import org.settlementservice.settlementservice.models.SettlementReport;
 import org.settlementservice.settlementservice.models.SettlementTransaction;
@@ -114,6 +115,52 @@ class SettlementReportUploadProcessingIntegrationTest extends AbstractController
         assertThat(settlementReportRowErrorRepository.findAll().stream()
                 .filter(e -> e.getSettlementReport().getId().equals(settlementReportId))
                 .toList()).hasSize(1);
+    }
+
+    @Test
+    void upload_reportedAmountOutsideTolerance_rejectsReportAndAllowsCorrectedRetry() throws Exception {
+        Long accountId = createAccount("2234567893");
+        Long transactionId = createTransactionViaStatementUpload(accountId, "REF-601");
+
+        String mismatchedCsv = """
+                transaction_date,narration,transaction_reference,debit,credit
+                2026-06-02,CARD SETTLEMENT FEE,REF-601,0,4800
+                """;
+        MockMultipartFile mismatchedFile = new MockMultipartFile("file", "report.csv", "text/csv",
+                mismatchedCsv.getBytes(StandardCharsets.UTF_8));
+
+        String response = mockMvc.perform(multipart("/api/settlement-reports/upload")
+                        .file(mismatchedFile)
+                        .param("transactionId", transactionId.toString())
+                        .header("Authorization", bearer(adminToken)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long rejectedReportId = objectMapper.readTree(response).get("data").get("id").asLong();
+
+        assertThat(settlementReportRepository.findById(rejectedReportId)).isEmpty();
+        assertThat(settlementTransactionRepository.findBySettlementReportId(rejectedReportId)).isEmpty();
+        assertThat(transactionRepository.findById(transactionId).orElseThrow().getStatus())
+                .isNotEqualTo(TransactionStatus.MISMATCHED);
+
+        // The rejected report's row was deleted, so its unique FK on transactionId no longer
+        // blocks a corrected re-upload for the same transaction.
+        String correctedCsv = """
+                transaction_date,narration,transaction_reference,debit,credit
+                2026-06-02,CARD SETTLEMENT FEE,REF-601,0,5000
+                """;
+        MockMultipartFile correctedFile = new MockMultipartFile("file", "report.csv", "text/csv",
+                correctedCsv.getBytes(StandardCharsets.UTF_8));
+
+        String retryResponse = mockMvc.perform(multipart("/api/settlement-reports/upload")
+                        .file(correctedFile)
+                        .param("transactionId", transactionId.toString())
+                        .header("Authorization", bearer(adminToken)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long acceptedReportId = objectMapper.readTree(retryResponse).get("data").get("id").asLong();
+
+        SettlementReport acceptedReport = settlementReportRepository.findById(acceptedReportId).orElseThrow();
+        assertThat(acceptedReport.getStatus()).isEqualTo(BatchStatus.COMPLETED);
     }
 
     @Test
