@@ -1,0 +1,1706 @@
+{
+	"info": {
+		"_postman_id": "settlement-service-collection-v1",
+		"name": "Settlement Service",
+		"description": "Complete API collection for Settlement Service - A reconciliation system that processes bank statements and settlement reports, performs matching against internal records, and identifies discrepancies.\n\n**Base URL:** {{settlement_service}}\n\n**Authentication:** JWT Bearer token (get from Login endpoint)\n\n**Roles:**\n- ADMIN: Full access to setup and configuration\n- RECON_OFFICER: Can process transactions and run reconciliations\n\n**Key Flows:**\n1. Setup (Banks → Accounts → Rules → Formulas)\n2. Upload (Bank Statements → Settlement Reports)\n3. Resolve (Auto or Manual)\n4. Reconcile (Match against internal records)\n5. Review (Query discrepancies)\n\nSee SETTLEMENT_SERVICE_FLOW.md for detailed documentation.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"description": "JWT-based authentication. All other endpoints require Bearer token.",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const jsonData = pm.response.json();",
+									"    if (jsonData.data && jsonData.data.token) {",
+									"        pm.environment.set(\"jwt_token\", jsonData.data.token);",
+									"        console.log(\"Token saved to environment:\", jsonData.data.token);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+						},
+						"url": {
+							"raw": "{{settlement_service}}/api/auth/login",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"auth",
+								"login"
+							]
+						},
+						"description": "Authenticate user and receive JWT token.\n\n**Request Body:**\n- username (required): User's username\n- password (required): User's password\n\n**Response:**\n- token: JWT token to use in Authorization header\n- username: Authenticated user's username\n- role: User role (ADMIN or RECON_OFFICER)\n\n**Post-Response Script:** Automatically saves token to environment variable `jwt_token`"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Settlement Banks",
+			"description": "Manage settlement banks. Admin-only. Banks cannot be deleted, only deactivated.",
+			"item": [
+				{
+					"name": "Create Settlement Bank",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Access Bank\",\n  \"code\": \"044\"\n}"
+						},
+						"url": {
+							"raw": "{{settlement_service}}/api/settlement-banks",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"settlement-banks"
+							]
+						},
+						"description": "Create a new settlement bank.\n\n**Required Role:** ADMIN\n\n**Request Body:**\n- name (required): Bank name\n- code (required): 3-digit CBN bank code\n\n**Validation:**\n- Code must be exactly 3 numeric digits\n\n**Response:** Created bank with ID, name, code, and ACTIVE status"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Settlement Banks",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/settlement-banks",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"settlement-banks"
+							]
+						},
+						"description": "Retrieve all settlement banks.\n\n**Required Role:** ADMIN\n\n**Response:** List of all banks (both ACTIVE and INACTIVE)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Settlement Bank by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/settlement-banks/1",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"settlement-banks",
+								"1"
+							]
+						},
+						"description": "Retrieve a specific settlement bank by ID.\n\n**Required Role:** ADMIN\n\n**Path Parameter:**\n- id: Bank ID"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Settlement Bank",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Access Bank PLC\",\n  \"status\": \"ACTIVE\"\n}"
+						},
+						"url": {
+							"raw": "{{settlement_service}}/api/settlement-banks/1",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"settlement-banks",
+								"1"
+							]
+						},
+						"description": "Update settlement bank details.\n\n**Required Role:** ADMIN\n\n**Path Parameter:**\n- id: Bank ID\n\n**Request Body:**\n- name (optional): New bank name\n- status (optional): ACTIVE or INACTIVE\n\n**Note:** Bank code cannot be changed after creation. No DELETE endpoint - use status to deactivate."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Accounts",
+			"description": "Manage settlement accounts. Admin-only. Each account belongs to a settlement bank.",
+			"item": [
+				{
+					"name": "Create Account",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Moniepoint Settlement Account\",\n  \"accountNumber\": \"1234567890\",\n  \"bankId\": 1,\n  \"openingBalance\": 0,\n  \"description\": \"Main settlement account for card transactions\"\n}"
+						},
+						"url": {
+							"raw": "{{settlement_service}}/api/accounts",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"accounts"
+							]
+						},
+						"description": "Create a new account under a settlement bank.\n\n**Required Role:** ADMIN\n\n**Request Body:**\n- name (required): Account name\n- accountNumber (required): 10-34 digit account number\n- bankId (required): Settlement bank ID\n- openingBalance (optional): Initial opening balance (default: null)\n- description (optional): Account description\n\n**Response:** Created account with ACTIVE status\n\n**Note:** openingBalance is auto-updated after each bank statement upload to the statement's closing balance."
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Accounts",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/accounts",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"accounts"
+							]
+						},
+						"description": "Retrieve all accounts.\n\n**Required Role:** ADMIN\n\n**Response:** List of all accounts with bank details and current opening balance"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Account by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/accounts/1",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"accounts",
+								"1"
+							]
+						},
+						"description": "Retrieve a specific account by ID.\n\n**Required Role:** ADMIN\n\n**Path Parameter:**\n- id: Account ID"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Account",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Moniepoint Main Settlement Account\",\n  \"status\": \"ACTIVE\",\n  \"description\": \"Updated description\",\n  \"openingBalance\": 100000.50\n}"
+						},
+						"url": {
+							"raw": "{{settlement_service}}/api/accounts/1",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"accounts",
+								"1"
+							]
+						},
+						"description": "Update account details.\n\n**Required Role:** ADMIN\n\n**Path Parameter:**\n- id: Account ID\n\n**Request Body (all optional):**\n- name: New account name\n- status: ACTIVE or INACTIVE\n- description: New description\n- openingBalance: Manually set opening balance\n\n**Note:** Only provided fields are updated. Null fields are ignored."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Account",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/accounts/1",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"accounts",
+								"1"
+							]
+						},
+						"description": "Delete an account.\n\n**Required Role:** ADMIN\n\n**Path Parameter:**\n- id: Account ID\n\n**Warning:** This will fail if account has associated bank statements or transactions. Use status update to deactivate instead."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Classification Rules",
+			"description": "Manage transaction classification rules. Admin-only. Rules auto-categorize transactions by narration pattern during bank statement upload.",
+			"item": [
+				{
+					"name": "Create Classification Rule",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"regexPattern\": \".*POS.*\",\n  \"productType\": \"CARD_SETTLEMENT\",\n  \"accountId\": 1\n}"
+						},
+						"url": {
+							"raw": "{{settlement_service}}/api/classification-rules",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"classification-rules"
+							]
+						},
+						"description": "Create a new classification rule.\n\n**Required Role:** ADMIN\n\n**Request Body:**\n- regexPattern (required): Java regex pattern to match against transaction narration\n- productType (required): CARD_SETTLEMENT | PAYROLL | TRANSFER | LOAN_REPAYMENT | OTHERS\n- accountId (optional): If provided, rule only applies to this account (account-specific rules checked first)\n\n**Matching Logic:**\n- First match wins\n- Account-specific rules checked before global rules\n- Uses Java Pattern.compile() and Matcher.find()\n\n**Example Patterns:**\n- `\".*POS.*\"` - Matches any narration containing \"POS\"\n- `\"^PAYROLL.*\"` - Matches narrations starting with \"PAYROLL\"\n- `\".*LOAN REPAY.*\"` - Matches narrations containing \"LOAN REPAY\""
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Classification Rules",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/classification-rules",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"classification-rules"
+							]
+						},
+						"description": "Retrieve all classification rules.\n\n**Required Role:** ADMIN\n\n**Response:** List of all rules (global and account-specific)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Classification Rule by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/classification-rules/1",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"classification-rules",
+								"1"
+							]
+						},
+						"description": "Retrieve a specific classification rule by ID.\n\n**Required Role:** ADMIN"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Classification Rule",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"regexPattern\": \".*CARD.*|.*POS.*\",\n  \"productType\": \"CARD_SETTLEMENT\",\n  \"accountId\": null\n}"
+						},
+						"url": {
+							"raw": "{{settlement_service}}/api/classification-rules/1",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"classification-rules",
+								"1"
+							]
+						},
+						"description": "Update a classification rule.\n\n**Required Role:** ADMIN\n\n**Path Parameter:**\n- id: Rule ID\n\n**Request Body:**\n- regexPattern (required): New regex pattern\n- productType (required): New product type\n- accountId (optional): Account ID or null for global rule"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Classification Rule",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/classification-rules/1",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"classification-rules",
+								"1"
+							]
+						},
+						"description": "Delete a classification rule.\n\n**Required Role:** ADMIN\n\n**Path Parameter:**\n- id: Rule ID"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Reconciliation Formulas",
+			"description": "Manage reconciliation formulas. Admin-only. Formulas define how to match settlement transactions with internal records using placeholder patterns.",
+			"item": [
+				{
+					"name": "Create Reconciliation Formula",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"accountId\": 1,\n  \"name\": \"RRN-STAN Match\",\n  \"formula\": \"${rrn}/${stan}\",\n  \"description\": \"Match using RRN and STAN separated by slash\",\n  \"isDefault\": true,\n  \"active\": true\n}"
+						},
+						"url": {
+							"raw": "{{settlement_service}}/api/reconciliation-formulas",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"reconciliation-formulas"
+							]
+						},
+						"description": "Create a new reconciliation formula.\n\n**Required Role:** ADMIN\n\n**Request Body:**\n- accountId (required): Account this formula belongs to\n- name (required): Descriptive name\n- formula (required): Template with placeholders\n- description (optional): Detailed description\n- isDefault (optional): Mark as default formula for account (default: false)\n- active (optional): Enable/disable formula (default: true)\n\n**Supported Placeholders:**\n- `${rrn}` - Retrieval Reference Number\n- `${stan}` - System Trace Audit Number\n- `${pan}` - Primary Account Number\n- `${terminalId}` - Terminal ID\n- `${processorReference}` - Processor Reference\n\n**Example Formulas:**\n- `\"${rrn}/${stan}\"` → \"123456789012/001234\"\n- `\"${processorReference}\"` → \"PROC-REF-12345\"\n- `\"${rrn}_${pan}\"` → \"123456789012_1234****5678\"\n\n**Note:** Setting isDefault=true automatically unsets default on other formulas for same account"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Formulas by Account",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/reconciliation-formulas/account/1",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"reconciliation-formulas",
+								"account",
+								"1"
+							]
+						},
+						"description": "Get all formulas for a specific account.\n\n**Required Role:** ADMIN\n\n**Path Parameter:**\n- accountId: Account ID\n\n**Response:** List of formulas, with default formula flagged"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Formula by ID",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/reconciliation-formulas/1",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"reconciliation-formulas",
+								"1"
+							]
+						},
+						"description": "Get a specific formula by ID.\n\n**Required Role:** ADMIN"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Formula",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"RRN-STAN-PAN Match\",\n  \"formula\": \"${rrn}/${stan}/${pan}\",\n  \"description\": \"Updated to include PAN\",\n  \"active\": true\n}"
+						},
+						"url": {
+							"raw": "{{settlement_service}}/api/reconciliation-formulas/1",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"reconciliation-formulas",
+								"1"
+							]
+						},
+						"description": "Update a reconciliation formula.\n\n**Required Role:** ADMIN\n\n**Path Parameter:**\n- id: Formula ID\n\n**Request Body:**\n- name (optional): New name\n- formula (optional): New formula template\n- description (optional): New description\n- active (optional): Enable/disable\n\n**Note:** Cannot change accountId or isDefault via this endpoint. Use Set as Default endpoint for default flag."
+					},
+					"response": []
+				},
+				{
+					"name": "Set Formula as Default",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/reconciliation-formulas/1/set-default",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"reconciliation-formulas",
+								"1",
+								"set-default"
+							]
+						},
+						"description": "Set a formula as the default for its account.\n\n**Required Role:** ADMIN\n\n**Path Parameter:**\n- id: Formula ID\n\n**Effect:** Unsets default flag on other formulas for same account"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Formula",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/reconciliation-formulas/1",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"reconciliation-formulas",
+								"1"
+							]
+						},
+						"description": "Delete a reconciliation formula.\n\n**Required Role:** ADMIN\n\n**Path Parameter:**\n- id: Formula ID\n\n**Warning:** This will fail if formula is currently assigned to any settlement reports"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Bank Statements",
+			"description": "Upload and track bank statement files. Async processing parses CSV/Excel files, classifies transactions, and validates balance continuity.",
+			"item": [
+				{
+					"name": "Upload Bank Statement",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "accountId",
+									"value": "1",
+									"type": "text",
+									"description": "Account ID this statement belongs to"
+								},
+								{
+									"key": "file",
+									"type": "file",
+									"src": "/path/to/bank_statement.csv",
+									"description": "Bank statement file (CSV or Excel)"
+								},
+								{
+									"key": "openingBalance",
+									"value": "100000.50",
+									"type": "text",
+									"description": "Opening balance for this statement period"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{settlement_service}}/api/bank-statements/upload",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"bank-statements",
+								"upload"
+							]
+						},
+						"description": "Upload a bank statement file for async processing.\n\n**Required Role:** ADMIN or RECON_OFFICER\n\n**Request (multipart/form-data):**\n- accountId (required): Account ID\n- file (required): CSV or Excel file\n- openingBalance (required): Starting balance for this statement\n\n**File Formats Supported:**\n- .csv (Commons CSV parser)\n- .xlsx (Apache POI parser)\n\n**Bank Statement Format:**\n- Header block (label/value rows) - skipped until \"Transaction Date\" row found\n- Fixed columns: Transaction Date | Value Date | Narration | Reference | Debit | Credit | Balance\n\n**Processing Flow:**\n1. Validates account exists\n2. Checks duplicate upload (by file hash) → 409 Conflict if duplicate\n3. Validates balance continuity (opening must match previous closing) → 400 Bad Request if mismatch\n4. Creates BankStatement record with PENDING status\n5. Returns statement ID immediately\n6. Async task processes file:\n   - Parses all rows\n   - Classifies by product type (via ClassificationRules)\n   - Checks duplicates (by account + reference number)\n   - Saves all valid transactions in batch\n   - Computes closing balance\n   - Updates account opening balance to closing balance\n   - Sets status to COMPLETED or COMPLETED_WITH_ERRORS\n\n**Response:**\n- id: Statement ID (use for status polling)\n- status: PENDING (processing not started yet)\n- totalEntries: null (not yet known)\n- errorMessage: null\n\n**Next Step:** Poll GET /api/bank-statements/{id} until status is COMPLETED"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Bank Statement Status",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/bank-statements/1",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"bank-statements",
+								"1"
+							]
+						},
+						"description": "Get upload status and processing details.\n\n**Required Role:** ADMIN or RECON_OFFICER\n\n**Path Parameter:**\n- id: Bank statement ID (from upload response)\n\n**Response:**\n- id: Statement ID\n- status: PENDING | PROCESSING | COMPLETED | COMPLETED_WITH_ERRORS | FAILED\n- totalEntries: Number of transactions processed (null if not complete)\n- errorMessage: Error details if FAILED\n\n**Polling Strategy:**\n- Poll every 2-5 seconds until status is terminal (COMPLETED, COMPLETED_WITH_ERRORS, or FAILED)\n- For large files (1000+ rows), processing may take 10-30 seconds\n\n**Status Meanings:**\n- PENDING: Queued, not started\n- PROCESSING: Currently parsing file\n- COMPLETED: All rows processed successfully\n- COMPLETED_WITH_ERRORS: Some rows failed to parse (check BankStatementRowError table)\n- FAILED: Complete failure (e.g., file unreadable, validation rejected)"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Settlement Reports",
+			"description": "Upload settlement reports for specific transactions. Validates net amount against transaction amount within tolerance.",
+			"item": [
+				{
+					"name": "Upload Settlement Report",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "transactionId",
+									"value": "1",
+									"type": "text",
+									"description": "Transaction ID to attach this report to"
+								},
+								{
+									"key": "file",
+									"type": "file",
+									"src": "/path/to/settlement_report.csv",
+									"description": "Settlement report file (CSV or Excel)"
+								},
+								{
+									"key": "formulaId",
+									"value": "1",
+									"type": "text",
+									"description": "Optional: Reconciliation formula ID to use immediately"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{settlement_service}}/api/settlement-reports/upload",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"settlement-reports",
+								"upload"
+							]
+						},
+						"description": "Upload settlement report for a transaction.\n\n**Required Role:** ADMIN or RECON_OFFICER\n\n**Request (multipart/form-data):**\n- transactionId (required): Transaction ID (must be UNRESOLVED)\n- file (required): CSV or Excel file\n- formulaId (optional): If provided, reconciliation references computed immediately\n\n**File Formats:**\n- CSV: Named headers (column order doesn't matter)\n  - Required columns: Transaction Date, Transaction Reference, Narration, Debit, Credit\n- Excel: Positional (row 0 is headers, then data rows)\n  - Columns: Transaction Date | Transaction Reference | Narration | Debit | Credit\n\n**Processing Flow:**\n1. Validates transaction exists and is UNRESOLVED\n2. Checks duplicate upload (transactionId is unique FK) → 409 Conflict if duplicate\n3. Creates SettlementReport record with PENDING status\n4. Returns report ID immediately\n5. Async task processes file:\n   - Parses all rows\n   - Calculates net amount: Σ(credit - debit)\n   - Compares net vs transaction amount (tolerance from config, default 0.01)\n   - **If within tolerance:**\n     - Saves all rows as SettlementTransaction records\n     - Marks transaction as RESOLVED\n     - If formulaId provided, computes reconciliationReference for each row\n     - Sets status to COMPLETED\n   - **If outside tolerance:**\n     - Deletes entire SettlementReport (preserves FK integrity)\n     - Transaction stays UNRESOLVED\n     - Can re-upload with correct file\n\n**Response:**\n- id: Report ID (use for status polling)\n- status: PENDING\n- totalEntries: null\n\n**Next Step:** Poll GET /api/settlement-reports/{id} until COMPLETED"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Settlement Report Status",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/settlement-reports/1",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"settlement-reports",
+								"1"
+							]
+						},
+						"description": "Get upload status and validation result.\n\n**Required Role:** ADMIN or RECON_OFFICER\n\n**Path Parameter:**\n- id: Settlement report ID\n\n**Response:**\n- id: Report ID\n- status: PENDING | PROCESSING | COMPLETED | COMPLETED_WITH_ERRORS | FAILED\n- totalEntries: Number of settlement transaction rows\n- errorMessage: Details if rejected or failed\n\n**Important:** If validation fails (net amount outside tolerance), status will be FAILED and the report row is DELETED entirely. Transaction remains UNRESOLVED. Re-upload with correct file."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Settlement Report Formula",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"formulaId\": 2\n}"
+						},
+						"url": {
+							"raw": "{{settlement_service}}/api/settlement-reports/1/reconciliation-formula",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"settlement-reports",
+								"1",
+								"reconciliation-formula"
+							]
+						},
+						"description": "Assign or change reconciliation formula for a settlement report.\n\n**Required Role:** ADMIN or RECON_OFFICER\n\n**Path Parameter:**\n- reportId: Settlement report ID\n\n**Request Body:**\n- formulaId (required): New formula ID\n\n**Processing:**\n1. Validates formula belongs to same account as transaction\n2. Loads all SettlementTransaction records for this report\n3. For each:\n   - Evaluates formula (e.g., \"${rrn}/${stan}\")\n   - Looks up matching InternalRecord\n   - Populates reconciliationReference field\n   - Sets reconciliationStatus to PENDING\n4. Now ready for reconciliation engine\n\n**Use Case:** Uploaded report without formula, or need to change matching strategy"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Transactions",
+			"description": "Query and search transactions. Supports filtering by status, account, product type, and date range.",
+			"item": [
+				{
+					"name": "Search Transactions",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/transactions?status=UNRESOLVED&accountId=1&productType=CARD_SETTLEMENT&dateFrom=2024-01-01&dateTo=2024-01-31&page=0&size=20",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"transactions"
+							],
+							"query": [
+								{
+									"key": "status",
+									"value": "UNRESOLVED",
+									"description": "Filter by status: UNRESOLVED | RESOLVED | MISMATCHED"
+								},
+								{
+									"key": "accountId",
+									"value": "1",
+									"description": "Filter by account ID"
+								},
+								{
+									"key": "productType",
+									"value": "CARD_SETTLEMENT",
+									"description": "Filter by product type: CARD_SETTLEMENT | PAYROLL | TRANSFER | LOAN_REPAYMENT | OTHERS"
+								},
+								{
+									"key": "dateFrom",
+									"value": "2024-01-01",
+									"description": "Start date (inclusive)"
+								},
+								{
+									"key": "dateTo",
+									"value": "2024-01-31",
+									"description": "End date (inclusive)"
+								},
+								{
+									"key": "page",
+									"value": "0",
+									"description": "Page number (0-indexed)"
+								},
+								{
+									"key": "size",
+									"value": "20",
+									"description": "Page size (default: 20)"
+								}
+							]
+						},
+						"description": "Search transactions with filters.\n\n**Required Role:** ADMIN or RECON_OFFICER\n\n**Query Parameters (all optional):**\n- status: Filter by TransactionStatus\n  - UNRESOLVED: No settlement data yet\n  - RESOLVED: Has settlement data, ready for reconciliation\n  - MISMATCHED: Reconciliation engine found discrepancy\n- accountId: Filter by account\n- productType: Filter by classification\n  - CARD_SETTLEMENT\n  - PAYROLL\n  - TRANSFER\n  - LOAN_REPAYMENT\n  - OTHERS\n- dateFrom: Start date (YYYY-MM-DD)\n- dateTo: End date (YYYY-MM-DD)\n- page: Page number (default: 0)\n- size: Page size (default: 20)\n\n**Response:** Paginated list with:\n- content: Array of transaction objects\n- totalElements: Total matching count\n- totalPages: Total pages\n- number: Current page\n- size: Page size\n\n**Example Use Cases:**\n- Find all unresolved transactions: `?status=UNRESOLVED`\n- Find mismatched card transactions in July: `?status=MISMATCHED&productType=CARD_SETTLEMENT&dateFrom=2024-07-01&dateTo=2024-07-31`\n- Get all transactions for account 1: `?accountId=1`"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Self-Resolution",
+			"description": "Auto-resolve transactions using regex rules. Creates synthetic settlement data for matching patterns.",
+			"item": [
+				{
+					"name": "Trigger Self-Resolution (All)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/transactions/self-resolve",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"transactions",
+								"self-resolve"
+							]
+						},
+						"description": "Resolve ALL unresolved transactions across the system.\n\n**Required Role:** ADMIN or RECON_OFFICER\n\n**No Parameters:** Processes all UNRESOLVED transactions\n\n**Processing:**\n1. Loads all active SelfResolutionRule records\n2. For each UNRESOLVED transaction:\n   - Tests narration against each rule's pattern\n   - On first match:\n     - Creates synthetic SettlementTransaction with amount = transaction.credit (or debit if credit=0)\n     - Marks transaction as RESOLVED\n   - Skips if already resolved\n\n**Response:**\n- resolved: Count of successfully resolved transactions\n\n**Use Case:** Bulk resolve all fee transactions or known patterns at end of month"
+					},
+					"response": []
+				},
+				{
+					"name": "Trigger Self-Resolution (By Account)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/transactions/self-resolve?accountId=1",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"transactions",
+								"self-resolve"
+							],
+							"query": [
+								{
+									"key": "accountId",
+									"value": "1",
+									"description": "Account ID to scope resolution to"
+								}
+							]
+						},
+						"description": "Resolve all UNRESOLVED transactions for a specific account.\n\n**Required Role:** ADMIN or RECON_OFFICER\n\n**Query Parameter:**\n- accountId: Account ID\n\n**Processing:** Same as \"All\" but scoped to account\n\n**Response:**\n- resolved: Count of transactions resolved\n\n**Use Case:** Resolve all unresolved transactions in a specific settlement account"
+					},
+					"response": []
+				},
+				{
+					"name": "Trigger Self-Resolution (By Statement)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/transactions/self-resolve?statementId=1",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"transactions",
+								"self-resolve"
+							],
+							"query": [
+								{
+									"key": "statementId",
+									"value": "1",
+									"description": "Bank statement ID to scope resolution to"
+								}
+							]
+						},
+						"description": "Resolve all UNRESOLVED transactions in a specific bank statement.\n\n**Required Role:** ADMIN or RECON_OFFICER\n\n**Query Parameter:**\n- statementId: Bank statement ID\n\n**Processing:** Same as \"All\" but scoped to statement\n\n**Response:**\n- resolved: Count of transactions resolved\n\n**Use Case:** After uploading a statement, auto-resolve known patterns before manually handling others"
+					},
+					"response": []
+				},
+				{
+					"name": "Trigger Self-Resolution (Single Transaction)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/transactions/self-resolve?transactionId=1",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"transactions",
+								"self-resolve"
+							],
+							"query": [
+								{
+									"key": "transactionId",
+									"value": "1",
+									"description": "Transaction ID to resolve"
+								}
+							]
+						},
+						"description": "Attempt to resolve a single transaction.\n\n**Required Role:** ADMIN or RECON_OFFICER\n\n**Query Parameter:**\n- transactionId: Transaction ID\n\n**Processing:**\n1. Tests narration against active rules\n2. On match: creates settlement transaction, marks as RESOLVED\n3. On no match or already resolved: skips\n\n**Response:**\n- resolved: true or false\n- message: \"Transaction resolved\" or \"Transaction skipped — already resolved or no rule matched\"\n\n**Use Case:** Test a single transaction against your rules before bulk processing"
+					},
+					"response": []
+				},
+				{
+					"name": "List Self-Resolution Rules",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/self-resolution/rules",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"self-resolution",
+								"rules"
+							]
+						},
+						"description": "List all self-resolution rules.\n\n**Required Role:** ADMIN\n\n**Response:** Array of rules with:\n- id, name, pattern, active\n\n**Note:** Only active rules are used during self-resolution processing"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Self-Resolution Rule",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Internal Transfer Fee\",\n  \"pattern\": \".*INTERNAL TRANSFER FEE.*\"\n}"
+						},
+						"url": {
+							"raw": "{{settlement_service}}/api/self-resolution/rules",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"self-resolution",
+								"rules"
+							]
+						},
+						"description": "Create a new self-resolution rule.\n\n**Required Role:** ADMIN\n\n**Request Body:**\n- name (required): Descriptive rule name\n- pattern (required): Java regex pattern to match against transaction narration\n\n**Example Patterns:**\n- `\".*FEE.*\"` - Matches narrations containing \"FEE\"\n- `\"^INTERNAL.*\"` - Matches narrations starting with \"INTERNAL\"\n- `\".*PAYROLL.*|.*SALARY.*\"` - Matches either pattern\n\n**Default:** Created as active=true"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Self-Resolution Rule",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Transfer Fees\",\n  \"pattern\": \".*TRANSFER FEE.*|.*INTERNAL FEE.*\"\n}"
+						},
+						"url": {
+							"raw": "{{settlement_service}}/api/self-resolution/rules/1",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"self-resolution",
+								"rules",
+								"1"
+							]
+						},
+						"description": "Update a self-resolution rule.\n\n**Required Role:** ADMIN\n\n**Path Parameter:**\n- id: Rule ID\n\n**Request Body:**\n- name (required): New name\n- pattern (required): New regex pattern"
+					},
+					"response": []
+				},
+				{
+					"name": "Set Rule Active Status",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "PATCH",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/self-resolution/rules/1/active?active=false",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"self-resolution",
+								"rules",
+								"1",
+								"active"
+							],
+							"query": [
+								{
+									"key": "active",
+									"value": "false",
+									"description": "true to activate, false to deactivate"
+								}
+							]
+						},
+						"description": "Enable or disable a self-resolution rule.\n\n**Required Role:** ADMIN\n\n**Path Parameter:**\n- id: Rule ID\n\n**Query Parameter:**\n- active: true or false\n\n**Use Case:** Temporarily disable a rule without deleting it"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Self-Resolution Rule",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/self-resolution/rules/1",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"self-resolution",
+								"rules",
+								"1"
+							]
+						},
+						"description": "Delete a self-resolution rule.\n\n**Required Role:** ADMIN\n\n**Path Parameter:**\n- id: Rule ID"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Reconciliation & Discrepancies",
+			"description": "Run reconciliation engine to match settlement transactions against internal records. Query discrepancies found during reconciliation.",
+			"item": [
+				{
+					"name": "Run Reconciliation Engine",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/reconciliation/run",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"reconciliation",
+								"run"
+							]
+						},
+						"description": "Run the reconciliation engine to match settlement transactions against internal records.\n\n**Required Role:** ADMIN or RECON_OFFICER\n\n**No Parameters:** Processes ALL settlement transactions with reconciliationStatus = PENDING\n\n**Processing Flow:**\n1. Load all PENDING settlement transactions\n2. Group by account.id\n3. Process each account in parallel (4-8 threads)\n4. For each settlement transaction:\n   a. Load associated reconciliation formula\n   b. Parse formula placeholders (e.g., \"${rrn}/${stan}\")\n   c. Extract reconciliationReference value\n   d. Query InternalRecord table using formula pattern\n   e. If not found → MISMATCHED, create Discrepancy\n   f. If found, compare amounts (BigDecimal.compareTo)\n   g. If match → MATCHED\n   h. If differ → MISMATCHED, create Discrepancy with amount difference\n5. Each account saves immediately (fault-tolerant)\n6. Update original Transaction status if mismatched\n\n**Response:**\n- totalProcessed: Total settlement transactions processed\n- matched: Count with MATCHED status\n- mismatched: Count with MISMATCHED status\n- processingTimeByAccount: Map of accountId → milliseconds\n\n**Performance:**\n- Parallel processing by account\n- Batch operations (saveAll)\n- Database indexes on rrn, stan, pan, processorReference\n- Large datasets (10,000+ transactions) complete in 30-60 seconds\n\n**Important:** Only settlement transactions with reconciliationReference populated (i.e., formula assigned) are processed. Others are skipped."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Reconciliation Results",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/reconciliation/results?transactionId=&page=0&size=20",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"reconciliation",
+								"results"
+							],
+							"query": [
+								{
+									"key": "transactionId",
+									"value": "",
+									"description": "Optional: Filter by transaction ID"
+								},
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "20"
+								}
+							]
+						},
+						"description": "Query reconciliation results (discrepancies).\n\n**Required Role:** ADMIN or RECON_OFFICER\n\n**Query Parameters:**\n- transactionId (optional): Filter by transaction\n- page, size: Pagination\n\n**Response:** Paginated discrepancies with:\n- settlementTransactionId\n- internalRecordId\n- amountDifference\n- settlementNarration\n- internalNarration\n- createdAt\n\n**Same as:** GET /api/discrepancies (alternate route)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get All Discrepancies",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/discrepancies?transactionId=&page=0&size=20",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"discrepancies"
+							],
+							"query": [
+								{
+									"key": "transactionId",
+									"value": "",
+									"description": "Optional: Filter by transaction ID"
+								},
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "20"
+								}
+							]
+						},
+						"description": "Query all discrepancies found during reconciliation.\n\n**Required Role:** ADMIN or RECON_OFFICER\n\n**Query Parameters:**\n- transactionId (optional): Filter by transaction\n- page (default: 0)\n- size (default: 20)\n\n**Response:** Paginated list of discrepancies\n\n**Discrepancy Fields:**\n- id: Discrepancy ID\n- settlementTransaction: Settlement transaction that mismatched\n- internalRecord: Internal record it was compared against\n- amountDifference: Absolute difference (settlement - internal)\n- settlementAmount: Amount from settlement\n- internalAmount: Amount from internal record\n- settlementNarration: Description from settlement\n- internalNarration: Description from internal record\n- createdAt: When discrepancy was detected\n\n**Use Cases:**\n- Review all mismatches after reconciliation run\n- Export for manual investigation\n- Generate reconciliation exception report"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Settlement Validation Summary",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/settlement-validation/summary?accountId=1&month=2024-08",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"settlement-validation",
+								"summary"
+							],
+							"query": [
+								{
+									"key": "accountId",
+									"value": "1",
+									"description": "Account ID"
+								},
+								{
+									"key": "month",
+									"value": "2024-08",
+									"description": "Month in YYYY-MM format"
+								}
+							]
+						},
+						"description": "Get settlement validation summary statistics for an account and month.\n\n**Required Role:** ADMIN or RECON_OFFICER\n\n**Query Parameters:**\n- accountId (required): Account ID\n- month (required): Month in YYYY-MM format\n\n**Response:**\n- totalTransactions: Total count for the month\n- unresolvedCount: Transactions without settlement data\n- resolvedCount: Transactions with settlement data\n- mismatchedCount: Transactions with reconciliation discrepancies\n- unresolvedAmount: Sum of unresolved transaction amounts\n- resolvedAmount: Sum of resolved amounts\n- mismatchedAmount: Sum of mismatched amounts\n\n**Use Case:** Monthly reconciliation dashboard showing resolution rates and amounts"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Demo & Testing",
+			"description": "Generate demo files and data for testing the complete upload → reconciliation flow. Admin-only.",
+			"item": [
+				{
+					"name": "Generate Demo Files",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/demo/generate-files?accountId=1&count=10&mismatchRate=0.2",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"demo",
+								"generate-files"
+							],
+							"query": [
+								{
+									"key": "accountId",
+									"value": "1",
+									"description": "Account to generate data for"
+								},
+								{
+									"key": "count",
+									"value": "10",
+									"description": "Number of transactions (default: 10)"
+								},
+								{
+									"key": "mismatchRate",
+									"value": "0.2",
+									"description": "Percentage with amount mismatches, 0.0-1.0 (default: 0.2 = 20%)"
+								}
+							]
+						},
+						"description": "Generate demo CSV files and internal records for testing.\n\n**Required Role:** ADMIN\n\n**Query Parameters:**\n- accountId (required): Account ID\n- count (default: 10): Number of transactions to generate\n- mismatchRate (default: 0.2): Percentage (0.0-1.0) that should have amount mismatches\n\n**What This Creates:**\n1. **Bank Statement CSV** - Positional format with header block\n   - Saved to: `./demo-files/bank_statement_{accountId}_{timestamp}.csv`\n   - Format: Header block + Transaction Date | Value Date | Narration | Reference | Debit | Credit | Balance\n\n2. **Settlement Report CSV** - Named column headers\n   - Saved to: `./demo-files/settlement_report_{accountId}_{timestamp}.csv`\n   - Format: Transaction Date, Transaction Reference, Narration, Debit, Credit\n\n3. **Internal Records** - Inserted directly into database\n   - Creates InternalRecord rows with rrn, stan, pan, terminalId, processorReference, amount\n   - These represent \"Bank A's authoritative records\"\n\n**Continuity Support:**\n- Checks for previous bank statements on this account\n- Uses previous closing balance as opening balance\n- Starts dates 1 day after previous statement ended\n- **Example:**\n  ```\n  Generation 1: Opening=0, Closing=55,000, Dates: Aug 3-7\n  Generation 2: Opening=55,000, Closing=110,000, Dates: Aug 8-12 (auto-continues!)\n  Generation 3: Opening=110,000, Closing=165,000, Dates: Aug 13-17\n  ```\n\n**Response:**\n- bankStatementFile: File path\n- settlementReportFile: File path\n- bankStatementDownloadUrl: URL for GET /api/demo/download/{fileName}\n- settlementReportDownloadUrl: URL for download\n- openingBalance: Statement opening balance\n- closingBalance: Statement closing balance\n- dateFrom: Statement start date\n- dateTo: Statement end date\n- transactionCount: Number of transactions generated\n- internalRecordsCreated: Count of internal records inserted\n- instructions: Step-by-step guide for testing upload flow\n\n**Testing Flow:**\n1. Call this endpoint to generate files\n2. Download bank statement CSV via download URL\n3. Upload to POST /api/bank-statements/upload\n4. Poll status until COMPLETED\n5. Query transactions to get IDs\n6. Download settlement report CSV\n7. Upload to POST /api/settlement-reports/upload for each transaction\n8. Run reconciliation engine\n9. Query discrepancies to see the intentional 20% mismatches\n\n**Mismatch Generation:**\n- `mismatchRate=0.2` means 20% of internal records will have amounts differing by ±10-50 NGN\n- This simulates real-world reconciliation scenarios"
+					},
+					"response": []
+				},
+				{
+					"name": "Download Demo File",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/demo/download/bank_statement_1_20240812.csv",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"demo",
+								"download",
+								"bank_statement_1_20240812.csv"
+							]
+						},
+						"description": "Download a generated demo file.\n\n**Required Role:** ADMIN\n\n**Path Parameter:**\n- fileName: File name from generate-files response\n\n**Response:** File download (text/csv or application/vnd.openxmlformats-officedocument.spreadsheetml.sheet)\n\n**Files Location:** `./demo-files/` directory (configurable via `demo.files.directory` property)\n\n**Use Case:** Download the generated CSVs to upload through real endpoints and test the complete flow"
+					},
+					"response": []
+				},
+				{
+					"name": "Generate Demo Data (Alternate Route)",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{settlement_service}}/api/demo/generate?accountId=1&count=10&mismatchRate=0.2",
+							"host": [
+								"{{settlement_service}}"
+							],
+							"path": [
+								"api",
+								"demo",
+								"generate"
+							],
+							"query": [
+								{
+									"key": "accountId",
+									"value": "1"
+								},
+								{
+									"key": "count",
+									"value": "10"
+								},
+								{
+									"key": "mismatchRate",
+									"value": "0.2"
+								}
+							]
+						},
+						"description": "Generate demo data (alternate route via ReconciliationController).\n\n**Required Role:** ADMIN\n\n**Same functionality as:** POST /api/demo/generate-files\n\n**Note:** This is a legacy route. Prefer /api/demo/generate-files for consistency."
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{jwt_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "settlement_service",
+			"value": "http://localhost:4850",
+			"type": "string"
+		},
+		{
+			"key": "jwt_token",
+			"value": "",
+			"type": "string"
+		}
+	]
+}
