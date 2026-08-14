@@ -13,6 +13,7 @@ public class ClassificationRuleResponse {
     private String regexPattern;
     private ProductType productType;
     private Long accountId;
+    private String accountName;
     private Instant createdAt;
 
 }
