@@ -10,9 +10,21 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 public interface TransactionRepository extends JpaRepository<Transaction, Long> {
+
+    List<Transaction> findByStatus(TransactionStatus status);
+
+    List<Transaction> findByStatusAndAccountId(TransactionStatus status, Long accountId);
+
+    List<Transaction> findByStatusAndBankStatementId(TransactionStatus status, Long bankStatementId);
+
+    /**
+     * Find all transactions for a bank statement, ordered by ID ascending (oldest first).
+     */
+    Page<Transaction> findByBankStatementIdOrderByIdAsc(Long bankStatementId, Pageable pageable);
 
     @Query("""
             SELECT t FROM Transaction t
