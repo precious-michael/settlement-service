@@ -59,8 +59,6 @@ This service helps you reconcile settlement reports from payment processors agai
 3. Run reconciliation → System matches each settlement line against InternalRecords using formula
 4. If Settlement Transaction #2341 says ₦100.00 but InternalRecord says ₦99.50 → **Discrepancy created**
 
-**Result:** Clear audit trail showing exactly which transactions matched, which mismatched, and by how much.
-
 ---
 
 ## Architecture
@@ -81,14 +79,14 @@ This service helps you reconcile settlement reports from payment processors agai
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│                       1. Bank Statement                         │
+│                       1. Bank Statement                        │
 │  Upload: CSV/Excel file with transactions from your bank       │
-│  Creates: Transaction records (status = UNRESOLVED)             │
+│  Creates: Transaction records (status = UNRESOLVED)            │
 │  Classified: Auto-tagged by product type (card, payroll, etc.) │
 └────────────────────────────────────────────────────────────────┘
                             ↓
 ┌────────────────────────────────────────────────────────────────┐
-│                     2. Settlement Report                        │
+│                     2. Settlement Report                       │
 │  Upload: CSV/Excel breakdown for ONE transaction               │
 │  Validates: Net amount must match transaction amount           │
 │  Creates: SettlementTransaction records                        │
@@ -96,8 +94,8 @@ This service helps you reconcile settlement reports from payment processors agai
 └────────────────────────────────────────────────────────────────┘
                             ↓
 ┌────────────────────────────────────────────────────────────────┐
-│                   3. Reconciliation Engine                      │
-│  Matches: SettlementTransactions ←→ InternalRecords           │
+│                   3. Reconciliation Engine                     │
+│  Matches: SettlementTransactions ←→ InternalRecords            │
 │  Using: Formula-based matching (RRN, STAN, Terminal ID, etc.)  │
 │  Compares: Amounts from settlement vs internal records         │
 │  Creates: Discrepancy records for mismatches                   │
@@ -105,7 +103,7 @@ This service helps you reconcile settlement reports from payment processors agai
 └────────────────────────────────────────────────────────────────┘
                             ↓
 ┌────────────────────────────────────────────────────────────────┐
-│                     4. Review Results                           │
+│                     4. Review Results                          │
 │  Query: Discrepancies (amount mismatches)                      │
 │  Filter: By account, date range, product type                  │
 │  Summary: Reconciliation statistics and reports                │
@@ -857,85 +855,31 @@ Reconciliation: "Do the settlement report's 5,000 lines match my 5,000 internal 
 
 ---
 
-## Future Work
-
-### High Priority
-
-1. **Fix Frontend Polling** (Critical)
-   - UI shows "Processing" forever even after completion
-   - Requires manual refresh
-   - Blocks demo UX
-
-2. **WebSocket Status Updates**
-   - Replace polling with push notifications
-   - Better UX for slow uploads
-   - Real-time progress updates
-
-3. **Bulk Internal Record Upload**
-   - Currently manual via API
-   - Add CSV upload endpoint
-   - Match flow of bank statement uploads
-
-### Medium Priority
-
-4. **Advanced Discrepancy Analysis**
-   - Group by pattern (all off by ₦0.50)
-   - Suggest bulk corrections
-   - Export to Excel
-
-5. **Audit Trail**
-   - Track who uploaded what, when
-   - Log reconciliation runs
-   - Track discrepancy resolutions
-
-6. **Scheduled Reconciliation**
-   - Auto-run daily at 2 AM
-   - Email summary report
-   - Alert on high discrepancy count
-
-### Low Priority
-
-7. **Multi-Currency Support**
-   - Currently assumes NGN
-   - Add currency conversion
-   - Support multi-currency statements
-
-8. **Self-Resolution Enhancements**
-   - More complex patterns
-   - Confidence scoring
-   - Manual review queue
-
-9. **Performance Optimization**
-   - Database query optimization
-   - Caching for classification rules
-   - Connection pool tuning
-
----
-
 ## Testing
-
-**Test Coverage:** 199 tests
-
-| Test Type | Count | Status |
-|-----------|-------|--------|
-| **Controller Integration** | 73 | ✅ All passing |
-| **Service Unit** | 58 | ✅ All passing |
-| **Repository** | 24 | ✅ All passing |
-| **Parser** | 12 | ✅ All passing |
-| **Async Task** | 19 | ⚠️ 3 failing (pre-existing) |
-| **Engine** | 13 | ⚠️ 1 failing (pre-existing) |
 
 ### Running Tests
 
 ```bash
-# All controller tests (73 tests, ~18s)
+# All tests
+./mvnw test
+
+# Controller integration tests only
 ./mvnw test -Dtest="*ControllerTest"
 
-# Specific test class
+# Single test class
 ./mvnw test -Dtest=ReconciliationControllerTest
 
-# With coverage
-./mvnw test jacoco:report
+# Single test method
+./mvnw test -Dtest=ReconciliationControllerTest#run_withAuthentication_returns200
+
+# Skip Docker pre-start (if containers already running)
+./mvnw test -DskipDockerRun=True
+
+# Integration tests (requires Docker)
+./mvnw verify
+
+# Use local test DB instead of Docker
+./mvnw test -Dspring.profiles.active=test
 ```
 
 **Note:** Integration tests use Testcontainers (Docker required).
@@ -1043,15 +987,3 @@ settlement-service/
 
 ---
 
-## Support
-
-**Documentation:**
-- [SETTLEMENT_SERVICE_FLOW.md](SETTLEMENT_SERVICE_FLOW.md) - Complete flow documentation
-- [CLAUDE.md](CLAUDE.md) - Developer guide
-- [INTEGRATION_TESTS_SUMMARY.md](INTEGRATION_TESTS_SUMMARY.md) - Test documentation
-
-**Contact:** precious.michael@moniepoint.com
-
----
-
-**Built in 1 month** | **166 tests passing** | **Parallel processing** | **Production-ready**
