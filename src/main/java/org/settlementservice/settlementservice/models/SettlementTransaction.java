@@ -2,12 +2,15 @@ package org.settlementservice.settlementservice.models;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
+import org.settlementservice.settlementservice.enums.ReconciliationStatus;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -60,4 +63,16 @@ public class SettlementTransaction extends BaseEntity {
 
     @Column(nullable = false, precision = 19, scale = 4)
     private BigDecimal credit;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reconciliation_status", nullable = false, length = 30)
+    private ReconciliationStatus reconciliationStatus = ReconciliationStatus.PENDING;
+
+    /**
+     * Computed reconciliation reference built from account's formula.
+     * Used to match this settlement transaction against an internal record.
+     * Formula examples: "${rrn}/${stan}", "${cid}/${referenceNumber}", etc.
+     */
+    @Column(name = "reconciliation_reference", length = 500)
+    private String reconciliationReference;
 }

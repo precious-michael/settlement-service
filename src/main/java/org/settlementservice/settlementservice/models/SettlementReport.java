@@ -12,6 +12,8 @@ import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
 import org.settlementservice.settlementservice.enums.BatchStatus;
+import org.settlementservice.settlementservice.enums.ReportReconciliationStatus;
+import org.settlementservice.settlementservice.models.ReconciliationFormula;
 
 import java.time.Instant;
 
@@ -47,4 +49,17 @@ public class SettlementReport extends BaseEntity {
 
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "reconciliation_status", nullable = false, length = 30)
+    private ReportReconciliationStatus reconciliationStatus = ReportReconciliationStatus.PENDING;
+
+    /**
+     * The reconciliation formula used for this settlement report.
+     * Determines how settlement transactions are matched to internal records.
+     * If null, uses the account's default formula.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reconciliation_formula_id")
+    private ReconciliationFormula reconciliationFormula;
 }

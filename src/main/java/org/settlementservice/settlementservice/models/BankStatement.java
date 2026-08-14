@@ -17,6 +17,7 @@ import org.settlementservice.settlementservice.enums.BatchStatus;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 
 @Getter
 @Setter
@@ -57,6 +58,13 @@ public class BankStatement extends BaseEntity {
 
     @Column(name = "closing_balance", precision = 19, scale = 4)
     private BigDecimal closingBalance;
+
+    /**
+     * The end date of the statement period. Used to ensure continuity between
+     * consecutive bank statements (next statement should start the day after this date).
+     */
+    @Column(name = "closing_date")
+    private LocalDate closingDate;
 
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
