@@ -3,6 +3,8 @@ package org.settlementservice.settlementservice.async;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.settlementservice.settlementservice.enums.BatchStatus;
+import org.settlementservice.settlementservice.enums.ReconciliationStatus;
+import org.settlementservice.settlementservice.models.ReconciliationFormula;
 import org.settlementservice.settlementservice.models.SettlementReport;
 import org.settlementservice.settlementservice.models.SettlementReportRowError;
 import org.settlementservice.settlementservice.models.SettlementTransaction;
@@ -10,9 +12,12 @@ import org.settlementservice.settlementservice.parsers.ParsedFile;
 import org.settlementservice.settlementservice.parsers.ParsedRow;
 import org.settlementservice.settlementservice.parsers.RowParseError;
 import org.settlementservice.settlementservice.parsers.StatementFileParserFactory;
+import org.settlementservice.settlementservice.reconciliation.utils.ReconciliationReferenceEvaluator;
+import org.settlementservice.settlementservice.repositories.ReconciliationFormulaRepository;
 import org.settlementservice.settlementservice.repositories.SettlementReportRepository;
 import org.settlementservice.settlementservice.repositories.SettlementReportRowErrorRepository;
 import org.settlementservice.settlementservice.repositories.SettlementTransactionRepository;
+import org.settlementservice.settlementservice.repositories.TransactionRepository;
 import org.settlementservice.settlementservice.services.SettlementValidationService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
@@ -41,6 +46,8 @@ public class SettlementReportUploadTask {
     private final SettlementReportRepository settlementReportRepository;
     private final SettlementReportRowErrorRepository settlementReportRowErrorRepository;
     private final SettlementTransactionRepository settlementTransactionRepository;
+    private final TransactionRepository transactionRepository;
+    private final ReconciliationFormulaRepository reconciliationFormulaRepository;
     private final StatementFileParserFactory statementFileParserFactory;
     private final SettlementValidationService settlementValidationService;
 
@@ -81,23 +88,50 @@ public class SettlementReportUploadTask {
         // A partial parse skips both the tolerance check and reconciliation below — its reported
         // sum would be unreliable — but the rows that DID parse still get saved, same as before.
         if (fullyParsed) {
-            BigDecimal expectedAmount = settlementReport.getTransaction().getCredit()
-                    .subtract(settlementReport.getTransaction().getDebit());
+            // Fetch transaction by ID to avoid LazyInitializationException
+            Long transactionId = settlementReport.getTransaction().getId();
+            var transaction = transactionRepository.findById(transactionId)
+                    .orElseThrow(() -> new IllegalStateException("Transaction not found: " + transactionId));
+
+            BigDecimal expectedAmount = transaction.getCredit().subtract(transaction.getDebit());
             BigDecimal reportedAmount = parsed.getRows().stream()
                     .map(row -> row.getCredit().subtract(row.getDebit()))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            if (expectedAmount.subtract(reportedAmount).abs().compareTo(tolerance) > 0) {
-                log.warn("Settlement report {} rejected — expected={} reported={} exceeds tolerance={}",
-                        settlementReport.getId(), expectedAmount, reportedAmount, tolerance);
-                settlementReportRepository.delete(settlementReport);
+            BigDecimal difference = expectedAmount.subtract(reportedAmount).abs();
+            if (difference.compareTo(tolerance) > 0) {
+                String errorMsg = String.format(
+                        "Bulk difference rejected: Expected net amount ₦%s, but settlement report shows ₦%s. " +
+                        "Difference of ₦%s exceeds tolerance of ₦%s.",
+                        expectedAmount, reportedAmount, difference, tolerance);
+                log.warn("Settlement report {} rejected — {}", settlementReport.getId(), errorMsg);
+                settlementReport.setStatus(BatchStatus.FAILED);
+                settlementReport.setErrorMessage(errorMsg);
+                settlementReportRepository.save(settlementReport);
                 return;
             }
         }
 
         List<SettlementTransaction> toSave = new ArrayList<>();
+
+        // Fetch formula by ID to avoid LazyInitializationException
+        ReconciliationFormula formula = null;
+        if (settlementReport.getReconciliationFormula() != null) {
+            Long formulaId = settlementReport.getReconciliationFormula().getId();
+            formula = reconciliationFormulaRepository.findById(formulaId).orElse(null);
+        }
+
         for (ParsedRow row : parsed.getRows()) {
-            toSave.add(toSettlementTransaction(settlementReport, row));
+            SettlementTransaction transaction = toSettlementTransaction(settlementReport, row);
+
+            // If formula is set, compute reconciliation reference immediately
+            if (formula != null) {
+                String reference = ReconciliationReferenceEvaluator.evaluate(formula.getFormula(), transaction);
+                transaction.setReconciliationReference(reference);
+                transaction.setReconciliationStatus(ReconciliationStatus.PENDING);
+            }
+
+            toSave.add(transaction);
         }
         settlementTransactionRepository.saveAll(toSave);
 

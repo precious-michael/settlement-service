@@ -9,8 +9,10 @@ import org.settlementservice.settlementservice.enums.AccountStatus;
 import org.settlementservice.settlementservice.exceptions.DuplicateResourceException;
 import org.settlementservice.settlementservice.exceptions.ResourceNotFoundException;
 import org.settlementservice.settlementservice.models.Account;
+import org.settlementservice.settlementservice.models.BankStatement;
 import org.settlementservice.settlementservice.models.SettlementBank;
 import org.settlementservice.settlementservice.repositories.AccountRepository;
+import org.settlementservice.settlementservice.repositories.BankStatementRepository;
 import org.settlementservice.settlementservice.repositories.SettlementBankRepository;
 import org.settlementservice.settlementservice.services.AccountService;
 import org.springframework.stereotype.Service;
@@ -24,6 +26,7 @@ public class AccountServiceImpl implements AccountService {
 
     private final AccountRepository accountRepository;
     private final SettlementBankRepository settlementBankRepository;
+    private final BankStatementRepository bankStatementRepository;
     private final ModelMapper modelMapper;
 
     @Override

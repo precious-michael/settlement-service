@@ -24,6 +24,9 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -52,6 +55,18 @@ public class BankStatementServiceImpl implements BankStatementService {
                     "This file has already been uploaded for account " + accountId);
         }
 
+        // Validate opening balance against previous statement's closing balance
+        Optional<BankStatement> previousStatement = bankStatementRepository.findLatestByAccountId(accountId);
+        if (previousStatement.isPresent()) {
+            BigDecimal expectedOpeningBalance = previousStatement.get().getClosingBalance();
+            if (expectedOpeningBalance != null && openingBalance.compareTo(expectedOpeningBalance) != 0) {
+                throw new IllegalArgumentException(
+                        String.format("Opening balance (%.2f) does not match previous statement's closing balance (%.2f)",
+                                openingBalance, expectedOpeningBalance));
+            }
+        }
+        // If no previous statement exists, this is the first upload - any opening balance is acceptable
+
         BankStatement bankStatement = BankStatement.builder()
                 .account(account)
                 .fileName(file.getOriginalFilename())
@@ -65,6 +80,25 @@ public class BankStatementServiceImpl implements BankStatementService {
 
         bankStatementUploadTask.process(saved.getId(), saved.getFileName(), fileBytes);
         return toResponse(saved);
+    }
+
+    @Override
+    public BankStatementUploadResponse getStatus(Long id) {
+        BankStatement bankStatement = bankStatementRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Bank statement not found: " + id));
+        return toResponse(bankStatement);
+    }
+
+    @Override
+    public List<BankStatementUploadResponse> getByAccountId(Long accountId) {
+        // Verify account exists
+        accountRepository.findById(accountId)
+                .orElseThrow(() -> new ResourceNotFoundException("No account found with id " + accountId));
+
+        List<BankStatement> bankStatements = bankStatementRepository.findByAccountIdOrderByUploadDateDesc(accountId);
+        return bankStatements.stream()
+                .map(this::toResponse)
+                .collect(Collectors.toList());
     }
 
     private BankStatementUploadResponse toResponse(BankStatement bankStatement) {

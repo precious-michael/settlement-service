@@ -13,6 +13,11 @@ spring:
   flyway:
     enabled: true
     locations: classpath:db/migration
+  mvc:
+    throw-exception-if-no-handler-found: true
+  web:
+    resources:
+      add-mappings: false
 
 server:
   port: 8080
@@ -30,6 +35,12 @@ reconciliation:
   # reported net amount that still counts as a match. 0.00 requires an exact match; a settlement
   # report outside this band is rejected outright rather than accepted and flagged.
   tolerance: ${RECONCILIATION_TOLERANCE:0.00}
+
+self-resolution:
+  schedule:
+    # Cron expression for the self-resolution job (Spring 6-field format: s m h d M dow).
+    # Default: every 4 hours.
+    cron: ${SELF_RESOLUTION_CRON:0 0 */4 * * *}
 
 DB_HOST: 127.0.0.1
 DB_USERNAME: settlement

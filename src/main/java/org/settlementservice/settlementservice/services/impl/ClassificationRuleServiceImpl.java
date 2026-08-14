@@ -73,6 +73,10 @@ public class ClassificationRuleServiceImpl implements ClassificationRuleService 
     }
 
     private ClassificationRuleResponse toResponse(ClassificationRule rule) {
-        return modelMapper.map(rule, ClassificationRuleResponse.class);
+        ClassificationRuleResponse response = modelMapper.map(rule, ClassificationRuleResponse.class);
+        if (rule.getAccount() != null) {
+            response.setAccountName(rule.getAccount().getName());
+        }
+        return response;
     }
 }

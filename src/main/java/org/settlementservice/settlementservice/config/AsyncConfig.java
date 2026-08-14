@@ -30,4 +30,20 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    /**
+     * Thread pool for parallel reconciliation processing by account.
+     * Core pool size matches typical number of concurrent accounts being reconciled.
+     */
+    @Bean(name = "reconciliation")
+    @ConditionalOnMissingBean(name = "reconciliation")
+    public TaskExecutor reconciliationExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(20);
+        executor.setThreadNamePrefix("reconciliation-");
+        executor.initialize();
+        return executor;
+    }
 }

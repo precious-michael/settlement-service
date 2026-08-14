@@ -5,8 +5,10 @@ import lombok.RequiredArgsConstructor;
 import org.settlementservice.settlementservice.dtos.request.AccountRequest;
 import org.settlementservice.settlementservice.dtos.response.AccountResponse;
 import org.settlementservice.settlementservice.dtos.request.AccountUpdateRequest;
+import org.settlementservice.settlementservice.dtos.response.BankStatementUploadResponse;
 import org.settlementservice.settlementservice.dtos.response.SettlementServiceResponse;
 import org.settlementservice.settlementservice.services.AccountService;
+import org.settlementservice.settlementservice.services.BankStatementService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -28,6 +30,7 @@ import java.util.List;
 public class AccountController {
 
     private final AccountService accountService;
+    private final BankStatementService bankStatementService;
 
     @PostMapping
     public ResponseEntity<SettlementServiceResponse<AccountResponse>> create(@Valid @RequestBody AccountRequest request) {
@@ -54,5 +57,14 @@ public class AccountController {
     public SettlementServiceResponse<Void> delete(@PathVariable Long id) {
         accountService.delete(id);
         return SettlementServiceResponse.success("Account deleted successfully");
+    }
+
+    /**
+     * Get all bank statements for an account.
+     */
+    @GetMapping("/{id}/bank-statements")
+    public SettlementServiceResponse<List<BankStatementUploadResponse>> getBankStatements(@PathVariable Long id) {
+        List<BankStatementUploadResponse> statements = bankStatementService.getByAccountId(id);
+        return SettlementServiceResponse.success("Bank statements retrieved successfully", statements);
     }
 }

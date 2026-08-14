@@ -10,9 +10,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.NoHandlerFoundException;
 
 import java.util.List;
 
@@ -101,6 +103,26 @@ public class GlobalExceptionHandler {
                         .message(ex.getMessage())
                         .success(false)
                         .error("You do not have permission")
+                        .build());
+    }
+
+    @ExceptionHandler(NoHandlerFoundException.class)
+    public ResponseEntity<?> handleNoHandlerFoundException(NoHandlerFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(SettlementServiceResponse.builder()
+                        .message("The requested endpoint does not exist: " + ex.getRequestURL())
+                        .success(false)
+                        .error("Not Found")
+                        .build());
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<?> handleMethodNotSupportedException(HttpRequestMethodNotSupportedException ex) {
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(SettlementServiceResponse.builder()
+                        .message("HTTP method " + ex.getMethod() + " is not supported for this endpoint")
+                        .success(false)
+                        .error("Method Not Allowed")
                         .build());
     }
 

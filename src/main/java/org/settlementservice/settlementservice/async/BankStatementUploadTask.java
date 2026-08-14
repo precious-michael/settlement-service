@@ -13,6 +13,7 @@ import org.settlementservice.settlementservice.parsers.ParsedFile;
 import org.settlementservice.settlementservice.parsers.ParsedRow;
 import org.settlementservice.settlementservice.parsers.RowParseError;
 import org.settlementservice.settlementservice.parsers.StatementFileParserFactory;
+import org.settlementservice.settlementservice.repositories.AccountRepository;
 import org.settlementservice.settlementservice.repositories.BankStatementRepository;
 import org.settlementservice.settlementservice.repositories.BankStatementRowErrorRepository;
 import org.settlementservice.settlementservice.repositories.ClassificationRuleRepository;
@@ -21,6 +22,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -43,6 +45,7 @@ public class BankStatementUploadTask {
     private final BankStatementRowErrorRepository bankStatementRowErrorRepository;
     private final TransactionRepository transactionRepository;
     private final ClassificationRuleRepository classificationRuleRepository;
+    private final AccountRepository accountRepository;
     private final StatementFileParserFactory statementFileParserFactory;
     private final ClassificationMatcher classificationMatcher;
 
@@ -100,10 +103,23 @@ public class BankStatementUploadTask {
         }
         transactionRepository.saveAll(transactions);
 
+        BigDecimal closingBalance = computeClosingBalance(bankStatement.getOpeningBalance(), parsed.getRows());
+        LocalDate closingDate = computeClosingDate(parsed.getRows());
+
         bankStatement.setTotalEntries(totalEntries);
-        bankStatement.setClosingBalance(computeClosingBalance(bankStatement.getOpeningBalance(), parsed.getRows()));
+        bankStatement.setClosingBalance(closingBalance);
+        bankStatement.setClosingDate(closingDate);
         bankStatement.setStatus(BatchStatus.COMPLETED);
         bankStatementRepository.save(bankStatement);
+
+        // Update account's opening balance to this statement's closing balance
+        // Fetch account by ID to avoid LazyInitializationException
+        accountRepository.findById(accountId).ifPresent(account -> {
+            account.setOpeningBalance(closingBalance);
+            accountRepository.save(account);
+            log.info("Updated account {} opening balance to {} (from statement {})",
+                    accountId, closingBalance, bankStatement.getId());
+        });
     }
 
     private BigDecimal computeClosingBalance(BigDecimal openingBalance, List<ParsedRow> rows) {
@@ -112,6 +128,17 @@ public class BankStatementUploadTask {
             closingBalance = closingBalance.add(row.getCredit()).subtract(row.getDebit());
         }
         return closingBalance;
+    }
+
+    /**
+     * Computes the closing date as the latest transaction date in the statement.
+     * This represents the end of the statement period for continuity checking.
+     */
+    private LocalDate computeClosingDate(List<ParsedRow> rows) {
+        return rows.stream()
+                .map(ParsedRow::getTransactionDate)
+                .max(LocalDate::compareTo)
+                .orElse(null);
     }
 
     private Transaction toTransaction(BankStatement bankStatement, ParsedRow row, List<ClassificationRule> rules) {
