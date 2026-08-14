@@ -81,7 +81,15 @@ class JwtServiceTest {
     @Test
     void validateToken_tamperedToken_isInvalid() {
         String token = jwtService.generateToken(authenticationFor("admin", "ROLE_ADMIN"));
-        String tampered = token.substring(0, token.length() - 1) + (token.endsWith("a") ? "b" : "a");
+        // JWT has 3 parts: header.payload.signature
+        // Tamper with the signature part by replacing characters in the middle
+        String[] parts = token.split("\\.");
+        String signature = parts[2];
+        // Replace middle characters of signature to ensure tampering is detected
+        String tamperedSignature = signature.substring(0, signature.length() / 2)
+                + "TAMPERED"
+                + signature.substring(signature.length() / 2 + 7);
+        String tampered = parts[0] + "." + parts[1] + "." + tamperedSignature;
 
         assertThat(jwtService.validateToken(tampered)).isFalse();
     }

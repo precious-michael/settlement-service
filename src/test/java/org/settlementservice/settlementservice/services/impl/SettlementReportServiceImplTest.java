@@ -14,7 +14,9 @@ import org.settlementservice.settlementservice.exceptions.ResourceNotFoundExcept
 import org.settlementservice.settlementservice.models.Account;
 import org.settlementservice.settlementservice.models.SettlementReport;
 import org.settlementservice.settlementservice.models.Transaction;
+import org.settlementservice.settlementservice.repositories.ReconciliationFormulaRepository;
 import org.settlementservice.settlementservice.repositories.SettlementReportRepository;
+import org.settlementservice.settlementservice.repositories.SettlementTransactionRepository;
 import org.settlementservice.settlementservice.repositories.TransactionRepository;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.transaction.support.TransactionCallback;
@@ -41,6 +43,12 @@ class SettlementReportServiceImplTest {
     private TransactionRepository transactionRepository;
 
     @Mock
+    private SettlementTransactionRepository settlementTransactionRepository;
+
+    @Mock
+    private ReconciliationFormulaRepository reconciliationFormulaRepository;
+
+    @Mock
     private SettlementReportUploadTask settlementReportUploadTask;
 
     @Mock
@@ -53,7 +61,8 @@ class SettlementReportServiceImplTest {
     @BeforeEach
     void setUp() {
         settlementReportService = new SettlementReportServiceImpl(
-                settlementReportRepository, transactionRepository, new ModelMapper(),
+                settlementReportRepository, transactionRepository, settlementTransactionRepository,
+                reconciliationFormulaRepository, new ModelMapper(),
                 settlementReportUploadTask, transactionTemplate);
 
         Account account = new Account();
@@ -72,7 +81,7 @@ class SettlementReportServiceImplTest {
     void upload_emptyFile_throwsIllegalArgumentException() {
         MockMultipartFile emptyFile = new MockMultipartFile("file", "report.csv", "text/csv", new byte[0]);
 
-        assertThatThrownBy(() -> settlementReportService.upload(1L, emptyFile))
+        assertThatThrownBy(() -> settlementReportService.upload(1L, emptyFile, null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -81,7 +90,7 @@ class SettlementReportServiceImplTest {
         when(transactionRepository.findById(1L)).thenReturn(Optional.empty());
         MockMultipartFile file = new MockMultipartFile("file", "report.csv", "text/csv", "data".getBytes());
 
-        assertThatThrownBy(() -> settlementReportService.upload(1L, file))
+        assertThatThrownBy(() -> settlementReportService.upload(1L, file, null))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -91,7 +100,7 @@ class SettlementReportServiceImplTest {
         when(settlementReportRepository.existsByTransactionId(1L)).thenReturn(true);
         MockMultipartFile file = new MockMultipartFile("file", "report.csv", "text/csv", "data".getBytes());
 
-        assertThatThrownBy(() -> settlementReportService.upload(1L, file))
+        assertThatThrownBy(() -> settlementReportService.upload(1L, file, null))
                 .isInstanceOf(DuplicateResourceException.class)
                 .hasMessageContaining("1");
 
@@ -110,7 +119,7 @@ class SettlementReportServiceImplTest {
         });
 
         MockMultipartFile file = new MockMultipartFile("file", "report.csv", "text/csv", "data".getBytes());
-        SettlementReportUploadResponse response = settlementReportService.upload(1L, file);
+        SettlementReportUploadResponse response = settlementReportService.upload(1L, file, null);
 
         assertThat(response.getId()).isEqualTo(1L);
         assertThat(response.getFileName()).isEqualTo("report.csv");

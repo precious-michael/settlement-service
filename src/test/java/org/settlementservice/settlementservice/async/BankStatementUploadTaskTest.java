@@ -16,6 +16,7 @@ import org.settlementservice.settlementservice.parsers.ParsedRow;
 import org.settlementservice.settlementservice.parsers.RowParseError;
 import org.settlementservice.settlementservice.parsers.StatementFileParser;
 import org.settlementservice.settlementservice.parsers.StatementFileParserFactory;
+import org.settlementservice.settlementservice.repositories.AccountRepository;
 import org.settlementservice.settlementservice.repositories.BankStatementRepository;
 import org.settlementservice.settlementservice.repositories.BankStatementRowErrorRepository;
 import org.settlementservice.settlementservice.repositories.ClassificationRuleRepository;
@@ -51,6 +52,9 @@ class BankStatementUploadTaskTest {
     private ClassificationRuleRepository classificationRuleRepository;
 
     @Mock
+    private AccountRepository accountRepository;
+
+    @Mock
     private StatementFileParserFactory statementFileParserFactory;
 
     @Mock
@@ -65,7 +69,7 @@ class BankStatementUploadTaskTest {
     void setUp() {
         task = new BankStatementUploadTask(
                 bankStatementRepository, bankStatementRowErrorRepository, transactionRepository,
-                classificationRuleRepository, statementFileParserFactory, classificationMatcher);
+                classificationRuleRepository, accountRepository, statementFileParserFactory, classificationMatcher);
     }
 
     @Test

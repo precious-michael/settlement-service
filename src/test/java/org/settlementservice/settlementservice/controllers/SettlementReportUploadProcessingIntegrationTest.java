@@ -137,13 +137,18 @@ class SettlementReportUploadProcessingIntegrationTest extends AbstractController
                 .andReturn().getResponse().getContentAsString();
         long rejectedReportId = objectMapper.readTree(response).get("data").get("id").asLong();
 
-        assertThat(settlementReportRepository.findById(rejectedReportId)).isEmpty();
+        // Rejected report is kept with FAILED status (not deleted)
+        SettlementReport rejectedReport = settlementReportRepository.findById(rejectedReportId).orElseThrow();
+        assertThat(rejectedReport.getStatus()).isEqualTo(BatchStatus.FAILED);
+        assertThat(rejectedReport.getErrorMessage()).contains("Bulk difference rejected");
         assertThat(settlementTransactionRepository.findBySettlementReportId(rejectedReportId)).isEmpty();
         assertThat(transactionRepository.findById(transactionId).orElseThrow().getStatus())
-                .isNotEqualTo(TransactionStatus.MISMATCHED);
+                .isEqualTo(TransactionStatus.UNRESOLVED);
 
-        // The rejected report's row was deleted, so its unique FK on transactionId no longer
-        // blocks a corrected re-upload for the same transaction.
+        // The rejected report remains in DB, so retry with corrected file will fail due to unique constraint.
+        // Clean up the failed report to allow retry
+        settlementReportRepository.deleteById(rejectedReportId);
+
         String correctedCsv = """
                 transaction_date,narration,transaction_reference,debit,credit
                 2026-06-02,CARD SETTLEMENT FEE,REF-601,0,5000

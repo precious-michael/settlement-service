@@ -15,9 +15,11 @@ import org.settlementservice.settlementservice.parsers.ParsedRow;
 import org.settlementservice.settlementservice.parsers.RowParseError;
 import org.settlementservice.settlementservice.parsers.StatementFileParser;
 import org.settlementservice.settlementservice.parsers.StatementFileParserFactory;
+import org.settlementservice.settlementservice.repositories.ReconciliationFormulaRepository;
 import org.settlementservice.settlementservice.repositories.SettlementReportRepository;
 import org.settlementservice.settlementservice.repositories.SettlementReportRowErrorRepository;
 import org.settlementservice.settlementservice.repositories.SettlementTransactionRepository;
+import org.settlementservice.settlementservice.repositories.TransactionRepository;
 import org.settlementservice.settlementservice.services.SettlementValidationService;
 
 import java.math.BigDecimal;
@@ -47,6 +49,12 @@ class SettlementReportUploadTaskTest {
     private SettlementTransactionRepository settlementTransactionRepository;
 
     @Mock
+    private TransactionRepository transactionRepository;
+
+    @Mock
+    private ReconciliationFormulaRepository reconciliationFormulaRepository;
+
+    @Mock
     private StatementFileParserFactory statementFileParserFactory;
 
     @Mock
@@ -61,6 +69,7 @@ class SettlementReportUploadTaskTest {
     void setUp() {
         task = new SettlementReportUploadTask(
                 settlementReportRepository, settlementReportRowErrorRepository, settlementTransactionRepository,
+                transactionRepository, reconciliationFormulaRepository,
                 statementFileParserFactory, settlementValidationService);
     }
 
@@ -92,8 +101,11 @@ class SettlementReportUploadTaskTest {
     @Test
     void process_allRowsSaveSuccessfully_marksCompletedAndTriggersReconciliation() {
         SettlementReport settlementReport = settlementReport();
+        Transaction transaction = settlementReport.getTransaction();
+
         when(settlementReportRepository.findById(1L)).thenReturn(Optional.of(settlementReport));
         when(settlementReportRepository.save(any(SettlementReport.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(transactionRepository.findById(10L)).thenReturn(Optional.of(transaction));
         when(statementFileParserFactory.getParser("report.xlsx")).thenReturn(parser);
 
         ParsedRow row = settlementRow(2, "REF-001");
@@ -132,8 +144,11 @@ class SettlementReportUploadTaskTest {
     @Test
     void process_saveAllThrowsUnexpectedException_failsWholeBatchWithoutReconciling() {
         SettlementReport settlementReport = settlementReport();
+        Transaction transaction = settlementReport.getTransaction();
+
         when(settlementReportRepository.findById(1L)).thenReturn(Optional.of(settlementReport));
         when(settlementReportRepository.save(any(SettlementReport.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(transactionRepository.findById(10L)).thenReturn(Optional.of(transaction));
         when(settlementTransactionRepository.saveAll(any())).thenThrow(new RuntimeException("constraint violation"));
         when(statementFileParserFactory.getParser("report.csv")).thenReturn(parser);
 
@@ -148,10 +163,13 @@ class SettlementReportUploadTaskTest {
     }
 
     @Test
-    void process_reportedAmountOutsideTolerance_rejectsAndDeletesReportWithoutPersistingOrReconciling() {
+    void process_reportedAmountOutsideTolerance_rejectsAndMarksFailedWithoutPersistingOrReconciling() {
         SettlementReport settlementReport = settlementReport();
+        Transaction transaction = settlementReport.getTransaction();
+
         when(settlementReportRepository.findById(1L)).thenReturn(Optional.of(settlementReport));
         when(settlementReportRepository.save(any(SettlementReport.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(transactionRepository.findById(10L)).thenReturn(Optional.of(transaction));
         when(statementFileParserFactory.getParser("report.csv")).thenReturn(parser);
 
         // Transaction's net is 5000 (set up in settlementReport()), but this line only reports 4800.
@@ -160,8 +178,9 @@ class SettlementReportUploadTaskTest {
 
         task.process(1L, "report.csv", "file".getBytes());
 
-        verify(settlementReportRepository).delete(settlementReport);
-        verify(settlementReportRepository, never()).save(argThat(r -> r.getStatus() == BatchStatus.COMPLETED));
+        assertThat(settlementReport.getStatus()).isEqualTo(BatchStatus.FAILED);
+        assertThat(settlementReport.getErrorMessage()).contains("Bulk difference rejected");
+        verify(settlementReportRepository, never()).delete(settlementReport);
         verifyNoInteractions(settlementTransactionRepository, settlementValidationService);
     }
 

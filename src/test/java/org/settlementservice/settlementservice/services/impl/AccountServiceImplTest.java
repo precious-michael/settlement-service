@@ -15,6 +15,7 @@ import org.settlementservice.settlementservice.exceptions.ResourceNotFoundExcept
 import org.settlementservice.settlementservice.models.Account;
 import org.settlementservice.settlementservice.models.SettlementBank;
 import org.settlementservice.settlementservice.repositories.AccountRepository;
+import org.settlementservice.settlementservice.repositories.BankStatementRepository;
 import org.settlementservice.settlementservice.repositories.SettlementBankRepository;
 
 import java.util.List;
@@ -36,13 +37,17 @@ class AccountServiceImplTest {
     @Mock
     private SettlementBankRepository settlementBankRepository;
 
+    @Mock
+    private BankStatementRepository bankStatementRepository;
+
     private AccountServiceImpl accountService;
 
     private SettlementBank bank;
 
     @BeforeEach
     void setUp() {
-        accountService = new AccountServiceImpl(accountRepository, settlementBankRepository, new ModelMapper());
+        accountService = new AccountServiceImpl(accountRepository, settlementBankRepository,
+                bankStatementRepository, new ModelMapper());
 
         bank = new SettlementBank();
         bank.setId(2L);
