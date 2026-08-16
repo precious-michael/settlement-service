@@ -25,9 +25,9 @@ public class ReconciliationFormulaValidator {
             "terminalId",
             "referenceNumber",
             "transactionReference",
-            "pan",
-            "processorReference",
-            "sessionId",
+//            "pan",
+//            "processorReference",
+//            "sessionId",
 
             // Dates and times
             "transactionDate",
@@ -36,22 +36,22 @@ public class ReconciliationFormulaValidator {
             // Transaction details
             "transactionType",
             "productType",
-            "narration",
+            "narration"
 
-            // Account details
-            "sourceAccountNumber",
-            "destinationAccountNumber",
-            "sourceBankCode",
-            "destinationBankCode",
+//            // Account details
+//            "sourceAccountNumber",
+//            "destinationAccountNumber",
+//            "sourceBankCode",
+//            "destinationBankCode",
 
-            // Amounts
-            "amount",
-            "debit",
-            "credit",
-            "currency",
+//            // Amounts
+//            "amount",
+//            "debit",
+//            "credit",
+//            "currency",
 
             // Additional
-            "cardAcceptorId"
+//            "cardAcceptorId"
     );
 
     /**

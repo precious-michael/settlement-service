@@ -14,6 +14,7 @@ import org.settlementservice.settlementservice.models.SelfResolutionRule;
 import org.settlementservice.settlementservice.models.SettlementReport;
 import org.settlementservice.settlementservice.models.SettlementTransaction;
 import org.settlementservice.settlementservice.models.Transaction;
+import org.settlementservice.settlementservice.repositories.ReconciliationFormulaRepository;
 import org.settlementservice.settlementservice.repositories.SelfResolutionRuleRepository;
 import org.settlementservice.settlementservice.repositories.SettlementReportRepository;
 import org.settlementservice.settlementservice.repositories.SettlementTransactionRepository;
@@ -42,6 +43,7 @@ class SelfResolutionServiceImplTest {
     @Mock private SettlementTransactionRepository settlementTransactionRepository;
     @Mock private SettlementValidationService settlementValidationService;
     @Mock private SelfResolutionRuleRepository ruleRepository;
+    @Mock private ReconciliationFormulaRepository reconciliationFormulaRepository;
     @Mock private SelfResolutionService self;
 
     private SelfResolutionServiceImpl service;
@@ -52,7 +54,8 @@ class SelfResolutionServiceImplTest {
     void setUp() {
         service = new SelfResolutionServiceImpl(
                 transactionRepository, settlementReportRepository,
-                settlementTransactionRepository, settlementValidationService, ruleRepository);
+                settlementTransactionRepository, settlementValidationService, ruleRepository,
+                reconciliationFormulaRepository);
         ReflectionTestUtils.setField(service, "self", self);
     }
 

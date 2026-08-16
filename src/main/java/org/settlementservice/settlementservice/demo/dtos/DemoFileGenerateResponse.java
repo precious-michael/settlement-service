@@ -29,6 +29,10 @@ public class DemoFileGenerateResponse {
     private String dateFrom;
     private String dateTo;
 
+    // Reconciliation guidance
+    private String recommendedFormulas;
+    private List<String> availableFields;
+
     // Instructions for user
     private String instructions;
 }

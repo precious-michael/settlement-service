@@ -3,16 +3,20 @@ package org.settlementservice.settlementservice.services.impl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.settlementservice.settlementservice.enums.BatchStatus;
+import org.settlementservice.settlementservice.enums.ReconciliationStatus;
 import org.settlementservice.settlementservice.enums.TransactionStatus;
 import org.settlementservice.settlementservice.exceptions.ResourceNotFoundException;
+import org.settlementservice.settlementservice.models.ReconciliationFormula;
 import org.settlementservice.settlementservice.models.SelfResolutionRule;
 import org.settlementservice.settlementservice.models.SettlementReport;
 import org.settlementservice.settlementservice.models.SettlementTransaction;
 import org.settlementservice.settlementservice.models.Transaction;
+import org.settlementservice.settlementservice.repositories.ReconciliationFormulaRepository;
 import org.settlementservice.settlementservice.repositories.SelfResolutionRuleRepository;
 import org.settlementservice.settlementservice.repositories.SettlementReportRepository;
 import org.settlementservice.settlementservice.repositories.SettlementTransactionRepository;
 import org.settlementservice.settlementservice.repositories.TransactionRepository;
+import org.settlementservice.settlementservice.reconciliation.utils.ReconciliationReferenceEvaluator;
 import org.settlementservice.settlementservice.services.SelfResolutionService;
 import org.settlementservice.settlementservice.services.SettlementValidationService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,6 +39,7 @@ public class SelfResolutionServiceImpl implements SelfResolutionService {
     private final SettlementTransactionRepository settlementTransactionRepository;
     private final SettlementValidationService settlementValidationService;
     private final SelfResolutionRuleRepository ruleRepository;
+    private final ReconciliationFormulaRepository reconciliationFormulaRepository;
 
     // Lazy self-reference so resolve() can call resolveOne() through the proxy,
     // ensuring each transaction resolves in its own @Transactional scope.
@@ -111,6 +116,17 @@ public class SelfResolutionServiceImpl implements SelfResolutionService {
     }
 
     private void createSettlementData(Transaction transaction, Matcher matcher, String ruleName) {
+        // Get the account's default reconciliation formula
+        ReconciliationFormula defaultFormula = reconciliationFormulaRepository
+                .findByAccountIdAndIsDefaultTrue(transaction.getAccount().getId())
+                .orElse(null);
+
+        if (defaultFormula == null) {
+            log.warn("Transaction {} self-resolved via rule '{}' but account {} has no default reconciliation formula. " +
+                     "Settlement report created but reconciliation may fail.",
+                    transaction.getId(), ruleName, transaction.getAccount().getId());
+        }
+
         SettlementReport report = new SettlementReport();
         report.setTransaction(transaction);
         report.setAccount(transaction.getAccount());
@@ -118,11 +134,13 @@ public class SelfResolutionServiceImpl implements SelfResolutionService {
         report.setUploadDate(Instant.now());
         report.setStatus(BatchStatus.COMPLETED);
         report.setTotalEntries(1);
+        report.setReconciliationFormula(defaultFormula);
         report = settlementReportRepository.save(report);
 
         SettlementTransaction settlementTransaction = new SettlementTransaction();
         settlementTransaction.setSettlementReport(report);
         settlementTransaction.setTransactionDate(transaction.getTransactionDate());
+        settlementTransaction.setSettlementDate(transaction.getTransactionDate());
         settlementTransaction.setNarration(transaction.getNarration());
         settlementTransaction.setTransactionReference(extractOrDefault(matcher, "ref",
                 transaction.getReferenceNumber() != null
@@ -133,6 +151,14 @@ public class SelfResolutionServiceImpl implements SelfResolutionService {
         settlementTransaction.setTerminalId(extract(matcher, "terminalId"));
         settlementTransaction.setDebit(transaction.getDebit());
         settlementTransaction.setCredit(transaction.getCredit());
+
+        // Evaluate and set reconciliation reference if formula exists
+        if (defaultFormula != null) {
+            String reference = ReconciliationReferenceEvaluator.evaluate(defaultFormula.getFormula(), settlementTransaction);
+            settlementTransaction.setReconciliationReference(reference);
+            settlementTransaction.setReconciliationStatus(ReconciliationStatus.PENDING);
+        }
+
         settlementTransactionRepository.save(settlementTransaction);
 
         log.info("Transaction {} self-resolved via rule '{}'", transaction.getId(), ruleName);

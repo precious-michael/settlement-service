@@ -9,15 +9,14 @@ import org.settlementservice.settlementservice.enums.AccountStatus;
 import org.settlementservice.settlementservice.exceptions.DuplicateResourceException;
 import org.settlementservice.settlementservice.exceptions.ResourceNotFoundException;
 import org.settlementservice.settlementservice.models.Account;
-import org.settlementservice.settlementservice.models.BankStatement;
 import org.settlementservice.settlementservice.models.SettlementBank;
 import org.settlementservice.settlementservice.repositories.AccountRepository;
-import org.settlementservice.settlementservice.repositories.BankStatementRepository;
 import org.settlementservice.settlementservice.repositories.SettlementBankRepository;
 import org.settlementservice.settlementservice.services.AccountService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Service
@@ -26,7 +25,6 @@ public class AccountServiceImpl implements AccountService {
 
     private final AccountRepository accountRepository;
     private final SettlementBankRepository settlementBankRepository;
-    private final BankStatementRepository bankStatementRepository;
     private final ModelMapper modelMapper;
 
     @Override
@@ -40,12 +38,13 @@ public class AccountServiceImpl implements AccountService {
         SettlementBank bank = settlementBankRepository.findById(request.getBankId())
                 .orElseThrow(() -> new ResourceNotFoundException("No settlement bank found with id " + request.getBankId()));
 
+
         Account account = new Account();
         account.setName(request.getName());
         account.setAccountNumber(request.getAccountNumber());
         account.setSettlementBank(bank);
         account.setStatus(AccountStatus.ACTIVE);
-        account.setOpeningBalance(request.getOpeningBalance());
+        account.setOpeningBalance(request.getOpeningBalance() != null ? request.getOpeningBalance() : BigDecimal.ZERO);
         account.setDescription(request.getDescription());
 
         return toResponse(accountRepository.save(account));

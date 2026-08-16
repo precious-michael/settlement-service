@@ -159,6 +159,27 @@ public class ReconciliationEngineImpl implements ReconciliationEngine {
                 log.debug("SettlementTransaction {} MISSING — no InternalRecord found using formula '{}'",
                         transaction.getId(), formula.getName());
                 transaction.setReconciliationStatus(ReconciliationStatus.MISSING);
+
+                // Create a Discrepancy record for the missing settlement transaction
+                // Expected amounts are ZERO since no internal record was found
+                Discrepancy missingDiscrepancy = new Discrepancy();
+                missingDiscrepancy.setTransaction(transaction.getSettlementReport().getTransaction());
+                missingDiscrepancy.setSettlementTransaction(transaction);
+
+                BigDecimal reportedAmount = transaction.getCredit().subtract(transaction.getDebit()).abs();
+                missingDiscrepancy.setReportedAmount(reportedAmount);
+                missingDiscrepancy.setReportedDebit(transaction.getDebit());
+                missingDiscrepancy.setReportedCredit(transaction.getCredit());
+
+                // Expected amounts are zero for missing matches
+                missingDiscrepancy.setExpectedAmount(BigDecimal.ZERO);
+                missingDiscrepancy.setExpectedDebit(BigDecimal.ZERO);
+                missingDiscrepancy.setExpectedCredit(BigDecimal.ZERO);
+
+                missingDiscrepancy.setDifference(reportedAmount);
+                missingDiscrepancy.setMatchedOn("No Match Found");
+                discrepancies.add(missingDiscrepancy);
+
                 transactionsToUpdate.add(transaction);
                 missing++;
                 continue;

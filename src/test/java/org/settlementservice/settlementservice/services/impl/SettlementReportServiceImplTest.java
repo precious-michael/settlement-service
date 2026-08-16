@@ -14,6 +14,7 @@ import org.settlementservice.settlementservice.exceptions.ResourceNotFoundExcept
 import org.settlementservice.settlementservice.models.Account;
 import org.settlementservice.settlementservice.models.SettlementReport;
 import org.settlementservice.settlementservice.models.Transaction;
+import org.settlementservice.settlementservice.repositories.DiscrepancyRepository;
 import org.settlementservice.settlementservice.repositories.ReconciliationFormulaRepository;
 import org.settlementservice.settlementservice.repositories.SettlementReportRepository;
 import org.settlementservice.settlementservice.repositories.SettlementTransactionRepository;
@@ -22,6 +23,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import jakarta.persistence.EntityManager;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -46,6 +48,9 @@ class SettlementReportServiceImplTest {
     private SettlementTransactionRepository settlementTransactionRepository;
 
     @Mock
+    private DiscrepancyRepository discrepancyRepository;
+
+    @Mock
     private ReconciliationFormulaRepository reconciliationFormulaRepository;
 
     @Mock
@@ -53,6 +58,9 @@ class SettlementReportServiceImplTest {
 
     @Mock
     private TransactionTemplate transactionTemplate;
+
+    @Mock
+    private EntityManager entityManager;
 
     private SettlementReportServiceImpl settlementReportService;
 
@@ -62,8 +70,8 @@ class SettlementReportServiceImplTest {
     void setUp() {
         settlementReportService = new SettlementReportServiceImpl(
                 settlementReportRepository, transactionRepository, settlementTransactionRepository,
-                reconciliationFormulaRepository, new ModelMapper(),
-                settlementReportUploadTask, transactionTemplate);
+                discrepancyRepository, reconciliationFormulaRepository, new ModelMapper(),
+                settlementReportUploadTask, transactionTemplate, entityManager);
 
         Account account = new Account();
         account.setId(3L);
@@ -95,23 +103,54 @@ class SettlementReportServiceImplTest {
     }
 
     @Test
-    void upload_transactionAlreadyHasReport_throwsDuplicateResourceExceptionWithoutSavingOrProcessing() {
+    void upload_transactionAlreadyHasNonFailedReport_throwsDuplicateResourceExceptionWithoutSavingOrProcessing() {
+        SettlementReport existingReport = new SettlementReport();
+        existingReport.setId(5L);
+        existingReport.setStatus(BatchStatus.COMPLETED); // Non-failed status
+
         when(transactionRepository.findById(1L)).thenReturn(Optional.of(transaction));
-        when(settlementReportRepository.existsByTransactionId(1L)).thenReturn(true);
+        when(settlementReportRepository.findByTransactionId(1L)).thenReturn(Optional.of(existingReport));
         MockMultipartFile file = new MockMultipartFile("file", "report.csv", "text/csv", "data".getBytes());
 
         assertThatThrownBy(() -> settlementReportService.upload(1L, file, null))
                 .isInstanceOf(DuplicateResourceException.class)
-                .hasMessageContaining("1");
+                .hasMessageContaining("COMPLETED");
 
         verify(settlementReportRepository, never()).save(any());
         verify(settlementReportUploadTask, never()).process(any(), any(), any());
     }
 
     @Test
+    void upload_transactionHasFailedReport_deletesOldReportAndCreatesNew() {
+        SettlementReport existingFailedReport = new SettlementReport();
+        existingFailedReport.setId(5L);
+        existingFailedReport.setStatus(BatchStatus.FAILED);
+
+        when(transactionRepository.findById(1L)).thenReturn(Optional.of(transaction));
+        when(settlementReportRepository.findByTransactionId(1L)).thenReturn(Optional.of(existingFailedReport));
+        when(settlementReportRepository.save(any(SettlementReport.class))).thenAnswer(invocation -> {
+            SettlementReport saved = invocation.getArgument(0);
+            saved.setId(10L);
+            return saved;
+        });
+
+        MockMultipartFile file = new MockMultipartFile("file", "report.csv", "text/csv", "data".getBytes());
+        SettlementReportUploadResponse response = settlementReportService.upload(1L, file, null);
+
+        // Verify old report and its data were deleted
+        verify(discrepancyRepository).deleteBySettlementReportId(5L);
+        verify(settlementTransactionRepository).deleteBySettlementReportId(5L);
+        verify(settlementReportRepository).delete(existingFailedReport);
+
+        // Verify new report was created and processed
+        assertThat(response.getId()).isEqualTo(10L);
+        verify(settlementReportUploadTask).process(eq(10L), eq("report.csv"), any());
+    }
+
+    @Test
     void upload_newReport_savesPendingBatchLinkedToTransactionAndTriggersProcessing() {
         when(transactionRepository.findById(1L)).thenReturn(Optional.of(transaction));
-        when(settlementReportRepository.existsByTransactionId(1L)).thenReturn(false);
+        when(settlementReportRepository.findByTransactionId(1L)).thenReturn(Optional.empty());
         when(settlementReportRepository.save(any(SettlementReport.class))).thenAnswer(invocation -> {
             SettlementReport saved = invocation.getArgument(0);
             saved.setId(1L);

@@ -6,5 +6,5 @@ import org.springframework.data.domain.Pageable;
 
 public interface DiscrepancyService {
 
-    Page<DiscrepancyResponse> search(Long transactionId, Pageable pageable);
+    Page<DiscrepancyResponse> search(Long transactionId, String type, Pageable pageable);
 }

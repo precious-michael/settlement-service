@@ -15,4 +15,6 @@ public interface SettlementTransactionRepository extends JpaRepository<Settlemen
     Page<SettlementTransaction> findBySettlementReportId(Long settlementReportId, Pageable pageable);
 
     List<SettlementTransaction> findByReconciliationStatus(ReconciliationStatus reconciliationStatus);
+
+    void deleteBySettlementReportId(Long settlementReportId);
 }

@@ -16,8 +16,8 @@ public class DiscrepancyServiceImpl implements DiscrepancyService {
     private final DiscrepancyRepository discrepancyRepository;
 
     @Override
-    public Page<DiscrepancyResponse> search(Long transactionId, Pageable pageable) {
-        return discrepancyRepository.search(transactionId, pageable).map(this::toResponse);
+    public Page<DiscrepancyResponse> search(Long transactionId, String type, Pageable pageable) {
+        return discrepancyRepository.search(transactionId, type, pageable).map(this::toResponse);
     }
 
     private DiscrepancyResponse toResponse(Discrepancy d) {

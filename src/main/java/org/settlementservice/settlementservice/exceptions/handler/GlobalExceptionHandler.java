@@ -3,6 +3,7 @@ package org.settlementservice.settlementservice.exceptions.handler;
 import lombok.extern.slf4j.Slf4j;
 import org.settlementservice.settlementservice.dtos.response.SettlementServiceResponse;
 import org.settlementservice.settlementservice.exceptions.DuplicateResourceException;
+import org.settlementservice.settlementservice.exceptions.FileParseException;
 import org.settlementservice.settlementservice.exceptions.ResourceNotFoundException;
 import org.settlementservice.settlementservice.exceptions.SettlementServiceException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -123,6 +124,16 @@ public class GlobalExceptionHandler {
                         .message("HTTP method " + ex.getMethod() + " is not supported for this endpoint")
                         .success(false)
                         .error("Method Not Allowed")
+                        .build());
+    }
+
+    @ExceptionHandler(FileParseException.class)
+    public ResponseEntity<?> handleFileParseException(FileParseException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(SettlementServiceResponse.builder()
+                        .message(ex.getMessage())
+                        .success(false)
+                        .error("File Parse Error")
                         .build());
     }
 

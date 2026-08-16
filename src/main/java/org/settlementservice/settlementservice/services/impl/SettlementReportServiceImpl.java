@@ -16,6 +16,7 @@ import org.settlementservice.settlementservice.enums.ReconciliationStatus;
 import org.settlementservice.settlementservice.models.ReconciliationFormula;
 import org.settlementservice.settlementservice.repositories.ReconciliationFormulaRepository;
 import org.settlementservice.settlementservice.reconciliation.utils.ReconciliationReferenceEvaluator;
+import org.settlementservice.settlementservice.repositories.DiscrepancyRepository;
 import org.settlementservice.settlementservice.repositories.SettlementReportRepository;
 import org.settlementservice.settlementservice.repositories.SettlementTransactionRepository;
 import org.settlementservice.settlementservice.repositories.TransactionRepository;
@@ -25,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
+import jakarta.persistence.EntityManager;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.time.Instant;
@@ -38,10 +40,12 @@ public class SettlementReportServiceImpl implements SettlementReportService {
     private final SettlementReportRepository settlementReportRepository;
     private final TransactionRepository transactionRepository;
     private final SettlementTransactionRepository settlementTransactionRepository;
+    private final DiscrepancyRepository discrepancyRepository;
     private final ReconciliationFormulaRepository reconciliationFormulaRepository;
     private final ModelMapper modelMapper;
     private final SettlementReportUploadTask settlementReportUploadTask;
     private final TransactionTemplate transactionTemplate;
+    private final EntityManager entityManager;
 
     @Override
     public SettlementReportUploadResponse upload(Long transactionId, MultipartFile file, Long formulaId) {
@@ -58,10 +62,42 @@ public class SettlementReportServiceImpl implements SettlementReportService {
             Transaction transaction = transactionRepository.findById(transactionId)
                     .orElseThrow(() -> new ResourceNotFoundException("No transaction found with id " + transactionId));
 
-            if (settlementReportRepository.existsByTransactionId(transactionId)) {
-                throw new DuplicateResourceException(
-                        "A settlement report already exists for transaction " + transactionId);
-            }
+            // Check if a settlement report already exists for this transaction
+            settlementReportRepository.findByTransactionId(transactionId).ifPresent(existingReport -> {
+                // If the existing report failed, delete it to allow re-upload
+                if (existingReport.getStatus() == BatchStatus.FAILED) {
+                    log.info("Deleting failed settlement report {} for transaction {} to allow re-upload",
+                            existingReport.getId(), transactionId);
+
+                    try {
+                        // Delete cascade: discrepancies → settlement transactions → settlement report
+                        // 1. Delete all discrepancies linked to this report's settlement transactions
+                        discrepancyRepository.deleteBySettlementReportId(existingReport.getId());
+                        log.info("Deleted discrepancies for report {}", existingReport.getId());
+
+                        // 2. Delete all settlement transactions
+                        settlementTransactionRepository.deleteBySettlementReportId(existingReport.getId());
+                        log.info("Deleted settlement transactions for report {}", existingReport.getId());
+
+                        // 3. Flush the session to ensure the @Modifying deletes are applied
+                        entityManager.flush();
+                        log.info("Flushed EntityManager after deletes");
+
+                        // 4. Delete the settlement report
+                        settlementReportRepository.delete(existingReport);
+                        entityManager.flush();
+                        log.info("Successfully deleted failed settlement report {}", existingReport.getId());
+                    } catch (Exception e) {
+                        log.error("Failed to delete settlement report {}", existingReport.getId(), e);
+                        throw new RuntimeException("Failed to delete failed settlement report: " + e.getMessage(), e);
+                    }
+                } else {
+                    // Report exists and is not failed (PENDING, PROCESSING, or COMPLETED)
+                    throw new DuplicateResourceException(
+                            "A settlement report already exists for transaction " + transactionId +
+                            " with status " + existingReport.getStatus() + ". Cannot upload a new report.");
+                }
+            });
 
             SettlementReport settlementReport = new SettlementReport();
             settlementReport.setTransaction(transaction);

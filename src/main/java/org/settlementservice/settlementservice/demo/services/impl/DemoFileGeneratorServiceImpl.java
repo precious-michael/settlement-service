@@ -2,14 +2,18 @@ package org.settlementservice.settlementservice.demo.services.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.settlementservice.settlementservice.async.ClassificationMatcher;
 import org.settlementservice.settlementservice.demo.dtos.DemoFileGenerateResponse;
 import org.settlementservice.settlementservice.demo.services.DemoFileGeneratorService;
+import org.settlementservice.settlementservice.enums.ProductType;
 import org.settlementservice.settlementservice.exceptions.ResourceNotFoundException;
 import org.settlementservice.settlementservice.models.Account;
 import org.settlementservice.settlementservice.models.BankStatement;
+import org.settlementservice.settlementservice.models.ClassificationRule;
 import org.settlementservice.settlementservice.models.InternalRecord;
 import org.settlementservice.settlementservice.repositories.AccountRepository;
 import org.settlementservice.settlementservice.repositories.BankStatementRepository;
+import org.settlementservice.settlementservice.repositories.ClassificationRuleRepository;
 import org.settlementservice.settlementservice.repositories.InternalRecordRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -36,6 +40,8 @@ public class DemoFileGeneratorServiceImpl implements DemoFileGeneratorService {
     private final AccountRepository accountRepository;
     private final BankStatementRepository bankStatementRepository;
     private final InternalRecordRepository internalRecordRepository;
+    private final ClassificationRuleRepository classificationRuleRepository;
+    private final ClassificationMatcher classificationMatcher;
 
     @Value("${demo.files.directory:./demo-files}")
     private String demoFilesDirectory;
@@ -48,6 +54,10 @@ public class DemoFileGeneratorServiceImpl implements DemoFileGeneratorService {
 
         String batchId = UUID.randomUUID().toString().substring(0, 8).toUpperCase();
         int mismatchCount = (int) Math.round(count * mismatchRate);
+
+        // Load classification rules for this account (account-specific + global rules)
+        List<ClassificationRule> classificationRules = classificationRuleRepository.findByAccountIdOrAccountIsNull(accountId);
+        log.info("Loaded {} classification rules for account {}", classificationRules.size(), accountId);
 
         // Check for continuity - use previous statement's closing balance and end date
         BigDecimal openingBalance = account.getOpeningBalance();
@@ -92,7 +102,7 @@ public class DemoFileGeneratorServiceImpl implements DemoFileGeneratorService {
             tx.transactionDate = txDate;
             tx.valueDate = txDate;
             tx.referenceNumber = ref;
-            tx.rrn = String.format("RRN%012d", 100000000000L + i);
+            tx.rrn = String.format("%012d", 100000000000L + i);
             tx.stan = String.format("%06d", 100000 + i);
             tx.terminalId = String.format("TERM%04d", 1000 + i);
 
@@ -100,7 +110,6 @@ public class DemoFileGeneratorServiceImpl implements DemoFileGeneratorService {
             if (willHaveSettlementReport) {
                 // Bulk settlement - simple narration
                 tx.narration = String.format("Settlement Batch %s - Transaction %d", batchId, i + 1);
-                tx.productType = "CARD_SETTLEMENT";
             } else {
                 // Self-resolution - narration matches regex patterns
                 // Rotate through 3 self-resolution patterns
@@ -109,21 +118,23 @@ public class DemoFileGeneratorServiceImpl implements DemoFileGeneratorService {
                     case 0 -> {
                         // NIP Transfer pattern: NIP/(?<rrn>[A-Z0-9]{12})/(?<ref>[^/]+)/(?<stan>[0-9]+)
                         tx.narration = String.format("NIP/%s/%s/%s", tx.rrn, ref, tx.stan);
-                        tx.productType = "TRANSFER";
                     }
                     case 1 -> {
                         // Card POS pattern: (?i)POS.+TERM:(?<terminalId>[A-Z0-9]{8}).+RRN:(?<rrn>[0-9]{12})
                         tx.narration = String.format("POS Purchase TERM:%s Merchant ABC RRN:%s",
                                 tx.terminalId, tx.rrn.replace("RRN", ""));
-                        tx.productType = "CARD_SETTLEMENT";
                     }
                     case 2 -> {
                         // USSD Transfer pattern: (?i)USSD.+REF:(?<ref>[A-Z0-9]++)
                         tx.narration = String.format("USSD Transfer to Account REF:%s", ref);
-                        tx.productType = "TRANSFER";
                     }
                 }
             }
+
+            // Classify transaction using rules from the database
+            ProductType productType = classificationMatcher.classify(tx.narration, classificationRules)
+                    .orElse(ProductType.OTHERS);
+            tx.productType = productType.toString();
             tx.debit = isDebit ? amount : BigDecimal.ZERO;
             tx.credit = isDebit ? BigDecimal.ZERO : amount;
             tx.balance = runningBalance;
@@ -209,6 +220,8 @@ public class DemoFileGeneratorServiceImpl implements DemoFileGeneratorService {
                     .closingBalance(runningBalance)
                     .dateFrom(startDate.format(displayFormat))
                     .dateTo(startDate.plusDays(count - 1).format(displayFormat))
+                    .recommendedFormulas("Use this formula for reconciliation: ${referenceNumber}")
+                    .availableFields(List.of("referenceNumber", "transactionReference", "rrn", "stan", "terminalId", "transactionDate"))
                     .instructions(instructions)
                     .build();
 

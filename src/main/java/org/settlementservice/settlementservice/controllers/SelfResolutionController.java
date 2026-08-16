@@ -2,7 +2,9 @@ package org.settlementservice.settlementservice.controllers;
 
 import lombok.RequiredArgsConstructor;
 import org.settlementservice.settlementservice.dtos.response.SettlementServiceResponse;
+import org.settlementservice.settlementservice.repositories.ReconciliationFormulaRepository;
 import org.settlementservice.settlementservice.services.SelfResolutionService;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,6 +21,7 @@ import java.util.Map;
 public class SelfResolutionController {
 
     private final SelfResolutionService selfResolutionService;
+    private final ReconciliationFormulaRepository reconciliationFormulaRepository;
 
     /**
      * Trigger self-resolution. Exactly one scope applies:
@@ -37,6 +40,22 @@ public class SelfResolutionController {
             boolean resolved = selfResolutionService.resolveOne(transactionId);
             String message = resolved ? "Transaction resolved" : "Transaction skipped — already resolved or no rule matched";
             return ResponseEntity.ok(SettlementServiceResponse.success(message, Map.of("resolved", resolved)));
+        }
+
+        // Validate that account has a default reconciliation formula if accountId is specified
+        if (accountId != null) {
+            boolean hasDefaultFormula = reconciliationFormulaRepository
+                    .findByAccountIdAndIsDefaultTrue(accountId)
+                    .isPresent();
+
+            if (!hasDefaultFormula) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(SettlementServiceResponse.<String>builder()
+                                .success(false)
+                                .error("Account must have a default reconciliation formula before self-resolution can be performed. " +
+                                        "Please create a reconciliation formula and mark it as default.")
+                                .build());
+            }
         }
 
         int count = selfResolutionService.resolve(accountId, statementId);

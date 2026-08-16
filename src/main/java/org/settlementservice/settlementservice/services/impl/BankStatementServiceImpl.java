@@ -44,6 +44,14 @@ public class BankStatementServiceImpl implements BankStatementService {
             throw new IllegalArgumentException("Uploaded file is empty");
         }
 
+        if (openingBalance == null) {
+            throw new IllegalArgumentException("Opening balance is required");
+        }
+
+        if (openingBalance.signum() < 0) {
+            throw new IllegalArgumentException("Opening balance cannot be negative");
+        }
+
         byte[] fileBytes = readBytes(file);
         String fileHash = sha256Hex(fileBytes);
 

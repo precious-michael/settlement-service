@@ -4,6 +4,7 @@ import org.settlementservice.settlementservice.models.Discrepancy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -29,6 +30,19 @@ public interface DiscrepancyRepository extends JpaRepository<Discrepancy, Long> 
     @Query("""
             SELECT d FROM Discrepancy d
             WHERE (:transactionId IS NULL OR d.transaction.id = :transactionId)
+            AND (:type IS NULL
+                 OR (:type = 'missing' AND d.matchedOn = 'No Match Found')
+                 OR (:type = 'mismatched' AND d.matchedOn != 'No Match Found'))
             """)
-    Page<Discrepancy> search(@Param("transactionId") Long transactionId, Pageable pageable);
+    Page<Discrepancy> search(
+            @Param("transactionId") Long transactionId,
+            @Param("type") String type,
+            Pageable pageable);
+
+    @Modifying
+    @Query("""
+            DELETE FROM Discrepancy d
+            WHERE d.settlementTransaction.settlementReport.id = :settlementReportId
+            """)
+    void deleteBySettlementReportId(@Param("settlementReportId") Long settlementReportId);
 }

@@ -47,7 +47,7 @@ class AccountServiceImplTest {
     @BeforeEach
     void setUp() {
         accountService = new AccountServiceImpl(accountRepository, settlementBankRepository,
-                bankStatementRepository, new ModelMapper());
+                new ModelMapper());
 
         bank = new SettlementBank();
         bank.setId(2L);

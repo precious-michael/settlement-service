@@ -62,6 +62,8 @@ public class ReconciliationReferenceEvaluator {
         addIfNotNull(fields, "stan", transaction.getStan());
         addIfNotNull(fields, "terminalId", transaction.getTerminalId());
         addIfNotNull(fields, "transactionReference", transaction.getTransactionReference());
+        // Alias for compatibility with InternalRecord formulas that use ${referenceNumber}
+        addIfNotNull(fields, "referenceNumber", transaction.getTransactionReference());
         addIfNotNull(fields, "transactionDate", transaction.getTransactionDate() != null
                 ? transaction.getTransactionDate().toString() : null);
         addIfNotNull(fields, "narration", transaction.getNarration());

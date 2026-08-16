@@ -24,10 +24,11 @@ public class DiscrepancyController {
     @GetMapping
     public ResponseEntity<SettlementServiceResponse<Page<DiscrepancyResponse>>> search(
             @RequestParam(required = false) Long transactionId,
+            @RequestParam(required = false) String type,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         Page<DiscrepancyResponse> results =
-                discrepancyService.search(transactionId, PageRequest.of(page, size));
+                discrepancyService.search(transactionId, type, PageRequest.of(page, size));
         return ResponseEntity.ok(SettlementServiceResponse.success("Discrepancies retrieved successfully", results));
     }
 }
