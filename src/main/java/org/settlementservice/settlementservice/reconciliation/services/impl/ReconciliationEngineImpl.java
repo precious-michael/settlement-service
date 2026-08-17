@@ -158,10 +158,9 @@ public class ReconciliationEngineImpl implements ReconciliationEngine {
         try {
             log.info("Starting actual reconciliation processing for task {}", taskId);
 
-            if (!settlementTransactionIds.isEmpty()) {
-                log.info("Deleting {} old discrepancies", settlementTransactionIds.size());
-                discrepancyRepository.deleteBySettlementTransactionIdIn(settlementTransactionIds);
-            }
+            // Clear all old discrepancies before reconciling fresh
+            log.info("Clearing all old discrepancies");
+            discrepancyRepository.deleteAll();
 
             // Fetch transactions with all required relationships eagerly loaded
             log.info("Fetching {} transactions with relationships", settlementTransactionIds.size());
