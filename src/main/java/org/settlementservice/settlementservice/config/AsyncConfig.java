@@ -46,4 +46,20 @@ public class AsyncConfig {
         executor.initialize();
         return executor;
     }
+
+    /**
+     * Thread pool for self-resolution processing.
+     * Separate from reconciliation to avoid resource contention.
+     */
+    @Bean(name = "self-resolution")
+    @ConditionalOnMissingBean(name = "self-resolution")
+    public TaskExecutor selfResolutionExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(4);
+        executor.setMaxPoolSize(8);
+        executor.setQueueCapacity(20);
+        executor.setThreadNamePrefix("self-resolution-");
+        executor.initialize();
+        return executor;
+    }
 }

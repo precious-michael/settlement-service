@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 public interface DiscrepancyRepository extends JpaRepository<Discrepancy, Long> {
@@ -45,4 +46,11 @@ public interface DiscrepancyRepository extends JpaRepository<Discrepancy, Long> 
             WHERE d.settlementTransaction.settlementReport.id = :settlementReportId
             """)
     void deleteBySettlementReportId(@Param("settlementReportId") Long settlementReportId);
+
+    @Modifying
+    @Query("""
+            DELETE FROM Discrepancy d
+            WHERE d.settlementTransaction.id IN :settlementTransactionIds
+            """)
+    void deleteBySettlementTransactionIdIn(@Param("settlementTransactionIds") List<Long> settlementTransactionIds);
 }

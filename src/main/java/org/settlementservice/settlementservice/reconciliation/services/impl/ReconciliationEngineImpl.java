@@ -2,13 +2,19 @@ package org.settlementservice.settlementservice.reconciliation.services.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.settlementservice.settlementservice.reconciliation.dtos.ReconciliationRunResponse;
+import org.settlementservice.settlementservice.enums.AsyncTaskStatus;
+import org.settlementservice.settlementservice.enums.AsyncTaskType;
 import org.settlementservice.settlementservice.enums.ReconciliationStatus;
 import org.settlementservice.settlementservice.enums.ReportReconciliationStatus;
+import org.settlementservice.settlementservice.models.AsyncTask;
 import org.settlementservice.settlementservice.models.Discrepancy;
 import org.settlementservice.settlementservice.models.InternalRecord;
 import org.settlementservice.settlementservice.models.ReconciliationFormula;
 import org.settlementservice.settlementservice.models.SettlementTransaction;
+import org.settlementservice.settlementservice.repositories.AsyncTaskRepository;
 import org.settlementservice.settlementservice.repositories.DiscrepancyRepository;
 import org.settlementservice.settlementservice.repositories.InternalRecordRepository;
 import org.settlementservice.settlementservice.repositories.ReconciliationFormulaRepository;
@@ -19,6 +25,8 @@ import org.settlementservice.settlementservice.reconciliation.utils.Reconciliati
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -46,14 +54,23 @@ public class ReconciliationEngineImpl implements ReconciliationEngine {
     private final InternalRecordRepository internalRecordRepository;
     private final DiscrepancyRepository discrepancyRepository;
     private final ReconciliationFormulaRepository reconciliationFormulaRepository;
+    private final AsyncTaskRepository asyncTaskRepository;
+
+    @Autowired
+    @Lazy
+    private ReconciliationEngine self;
 
     @Override
     public ReconciliationRunResponse run() {
-        // Process both PENDING (new) and MISSING (retry after internal records added)
+        log.info("=============== RECONCILIATION RUN STARTED ===============");
+
+        // Get pending/missing transactions
         List<SettlementTransaction> pendingTransactions = settlementTransactionRepository
                 .findByReconciliationStatus(ReconciliationStatus.PENDING);
         List<SettlementTransaction> missingTransactions = settlementTransactionRepository
                 .findByReconciliationStatus(ReconciliationStatus.MISSING);
+
+        log.info("Found {} PENDING and {} MISSING transactions", pendingTransactions.size(), missingTransactions.size());
 
         List<SettlementTransaction> pending = new java.util.ArrayList<>();
         pending.addAll(pendingTransactions);
@@ -66,48 +83,146 @@ public class ReconciliationEngineImpl implements ReconciliationEngine {
                     .matched(0)
                     .mismatched(0)
                     .noMatchFound(0)
+                    .taskId(null)
                     .build();
         }
 
-        log.info("Reconciling {} transactions ({} pending, {} missing)",
-                pending.size(), pendingTransactions.size(), missingTransactions.size());
+        // Create and persist task in its own transaction to ensure async method can find it
+        Long taskId = createAndPersistAsyncTask(pending.size());
 
-        // Group transactions by account for parallel processing
-        Map<Long, List<SettlementTransaction>> transactionsByAccount = pending.stream()
-                .collect(Collectors.groupingBy(tx -> tx.getSettlementReport().getAccount().getId()));
+        log.info("Started reconciliation task {} for {} transactions ({} pending, {} missing)",
+                taskId, pending.size(), pendingTransactions.size(), missingTransactions.size());
 
-        log.info("Reconciling {} transactions across {} accounts in parallel",
-                pending.size(), transactionsByAccount.size());
-
-        // Process each account's transactions in parallel
-        // Each account saves its own results immediately as it completes
-        List<CompletableFuture<AccountReconciliationResult>> futures = transactionsByAccount.entrySet().stream()
-                .map(entry -> reconcileAccountTransactionsAsync(entry.getKey(), entry.getValue()))
+        // Extract transaction IDs (avoid passing lazy-loaded objects across thread boundaries)
+        List<Long> transactionIds = pending.stream()
+                .map(SettlementTransaction::getId)
                 .toList();
 
-        // Wait for all accounts to complete and aggregate counts
-        // Note: Each account has already saved its results independently
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-
-        // Aggregate only the counts (data is already saved)
-        int totalReconciled = 0, totalUnreconciled = 0, totalMissing = 0;
-
-        for (CompletableFuture<AccountReconciliationResult> future : futures) {
-            AccountReconciliationResult result = future.join();
-            totalReconciled += result.reconciled;
-            totalUnreconciled += result.unreconciled;
-            totalMissing += result.missing;
+        // Pre-compute transaction-to-account mapping to avoid lazy-loading in async context
+        log.info("Computing transaction-to-account mapping");
+        Map<Long, Long> transactionToAccountMap = new java.util.HashMap<>();
+        List<Object[]> mappings = settlementTransactionRepository.findTransactionAccountMapping(transactionIds);
+        for (Object[] row : mappings) {
+            Long txId = ((Number) row[0]).longValue();
+            Long accountId = ((Number) row[1]).longValue();
+            transactionToAccountMap.put(txId, accountId);
         }
+        log.info("Computed mapping for {} transactions", transactionToAccountMap.size());
 
-        log.info("Reconciliation run complete — processed={} reconciled={} unreconciled={} missing={}",
-                pending.size(), totalReconciled, totalUnreconciled, totalMissing);
+        // Submit async reconciliation through self proxy to ensure @Async is respected
+        log.info("Calling self.reconcileAsync with taskId={}, transaction count={}", taskId, transactionIds.size());
+        self.reconcileAsync(taskId, transactionIds, transactionToAccountMap);
+        log.info("self.reconcileAsync called - returning immediately with taskId={}", taskId);
 
         return ReconciliationRunResponse.builder()
+                .taskId(taskId)
                 .totalProcessed(pending.size())
-                .matched(totalReconciled)
-                .mismatched(totalUnreconciled)
-                .noMatchFound(totalMissing)
+                .matched(0)
+                .mismatched(0)
+                .noMatchFound(0)
                 .build();
+    }
+
+    /**
+     * Creates and persists an AsyncTask in its own transaction.
+     * This ensures the async method can immediately load the task from the database.
+     */
+    @Transactional
+    private Long createAndPersistAsyncTask(int totalRecords) {
+        AsyncTask task = asyncTaskRepository.save(AsyncTask.builder()
+                .type(AsyncTaskType.RECONCILIATION)
+                .status(AsyncTaskStatus.PROCESSING)
+                .totalRecords((long) totalRecords)
+                .processedRecords(0L)
+                .startedAt(Instant.now())
+                .build());
+
+        log.info("Created AsyncTask {} - status: PROCESSING", task.getId());
+        return task.getId();
+    }
+
+    @Async("reconciliation")
+    @Transactional
+    public void reconcileAsync(Long taskId, List<Long> settlementTransactionIds, Map<Long, Long> transactionToAccountMap) {
+        log.info("reconcileAsync started on thread: {}", Thread.currentThread().getName());
+
+        // Reload task to ensure it's available in this transaction context
+        AsyncTask task = asyncTaskRepository.findById(taskId).orElse(null);
+        if (task == null) {
+            log.error("AsyncTask {} not found in async context - cannot proceed", taskId);
+            return;
+        }
+
+        log.info("AsyncTask {} loaded successfully, status={}", taskId, task.getStatus());
+
+        try {
+            log.info("Starting actual reconciliation processing for task {}", taskId);
+
+            if (!settlementTransactionIds.isEmpty()) {
+                log.info("Deleting {} old discrepancies", settlementTransactionIds.size());
+                discrepancyRepository.deleteBySettlementTransactionIdIn(settlementTransactionIds);
+            }
+
+            // Fetch transactions with all required relationships eagerly loaded
+            log.info("Fetching {} transactions with relationships", settlementTransactionIds.size());
+            List<SettlementTransaction> pending = settlementTransactionRepository.findAllByIdWithRelationships(settlementTransactionIds);
+
+            if (pending.isEmpty()) {
+                log.warn("No transactions found for IDs: {}", settlementTransactionIds);
+                task.setStatus(AsyncTaskStatus.COMPLETED);
+                task.setCompletedAt(Instant.now());
+                asyncTaskRepository.save(task);
+                return;
+            }
+
+            log.info("Successfully loaded {} transactions", pending.size());
+
+            // Group transactions by account using pre-computed mapping (avoids lazy-loading)
+            Map<Long, List<SettlementTransaction>> transactionsByAccount = pending.stream()
+                    .collect(Collectors.groupingBy(tx -> transactionToAccountMap.getOrDefault(tx.getId(), -1L)));
+
+            log.info("Reconciling {} transactions across {} accounts in parallel",
+                    pending.size(), transactionsByAccount.size());
+
+            // Process each account's transactions in parallel
+            List<CompletableFuture<AccountReconciliationResult>> futures = transactionsByAccount.entrySet().stream()
+                    .map(entry -> reconcileAccountTransactionsAsync(entry.getKey(), entry.getValue()))
+                    .toList();
+
+            // Wait for all accounts to complete while tracking progress
+            int totalReconciled = 0, totalUnreconciled = 0, totalMissing = 0;
+            long processedSoFar = 0;
+
+            for (CompletableFuture<AccountReconciliationResult> future : futures) {
+                AccountReconciliationResult result = future.join();
+                totalReconciled += result.reconciled;
+                totalUnreconciled += result.unreconciled;
+                totalMissing += result.missing;
+                processedSoFar += (result.reconciled + result.unreconciled + result.missing);
+
+                // Update progress after each account completes
+                task.setProcessedRecords(processedSoFar);
+                asyncTaskRepository.save(task);
+            }
+
+            log.info("Reconciliation task {} complete — processed={} reconciled={} unreconciled={} missing={}",
+                    taskId, pending.size(), totalReconciled, totalUnreconciled, totalMissing);
+
+            // Update task as completed with final results
+            task.setStatus(AsyncTaskStatus.COMPLETED);
+            task.setProcessedRecords((long) pending.size());
+            task.setMatchedCount((long) totalReconciled);
+            task.setUnmatchedCount((long) totalUnreconciled);
+            task.setMissingCount((long) totalMissing);
+            task.setCompletedAt(Instant.now());
+            asyncTaskRepository.save(task);
+        } catch (Exception e) {
+            log.error("Reconciliation task {} failed", taskId, e);
+            task.setStatus(AsyncTaskStatus.FAILED);
+            task.setErrorMessage(e.getMessage());
+            task.setCompletedAt(Instant.now());
+            asyncTaskRepository.save(task);
+        }
     }
 
     /**

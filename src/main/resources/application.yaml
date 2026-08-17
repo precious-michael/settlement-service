@@ -39,8 +39,8 @@ reconciliation:
 self-resolution:
   schedule:
     # Cron expression for the self-resolution job (Spring 6-field format: s m h d M dow).
-    # Default: every 4 hours.
-    cron: ${SELF_RESOLUTION_CRON:0 0 */4 * * *}
+    # Default: every 5 minutes.
+    cron: ${SELF_RESOLUTION_CRON:0 */5 * * * *}
 
 DB_HOST: 127.0.0.1
 DB_USERNAME: settlement

@@ -220,7 +220,7 @@ public class DemoFileGeneratorServiceImpl implements DemoFileGeneratorService {
                     .closingBalance(runningBalance)
                     .dateFrom(startDate.format(displayFormat))
                     .dateTo(startDate.plusDays(count - 1).format(displayFormat))
-                    .recommendedFormulas("Use this formula for reconciliation: ${referenceNumber}")
+                    .recommendedFormulas("${transactionReference} or ${rrn}/${stan}")
                     .availableFields(List.of("referenceNumber", "transactionReference", "rrn", "stan", "terminalId", "transactionDate"))
                     .instructions(instructions)
                     .build();
@@ -234,13 +234,28 @@ public class DemoFileGeneratorServiceImpl implements DemoFileGeneratorService {
      * Creates internal records to match against during reconciliation.
      * - For transactions with settlement reports (first N): creates records for mini-transactions
      * - For transactions without settlement reports (rest): creates records for main transaction
+     * - Transactions marked as mismatch: splits into UNRECONCILED (amount mismatch) and MISSING (no record)
      */
     private int createInternalRecords(List<DemoTransaction> transactions, int settlementsToGenerate) {
         int count = 0;
+        int mismatchCount = (int) transactions.stream().filter(t -> t.isMismatch).count();
+        int mismatchesProcessed = 0;
 
         for (int i = 0; i < transactions.size(); i++) {
             DemoTransaction mainTx = transactions.get(i);
             boolean hasSettlementReport = (i < settlementsToGenerate);
+
+            // For mismatch transactions: split 90% UNRECONCILED (amount mismatch), 10% MISSING (no record)
+            boolean shouldSkipRecord = mainTx.isMismatch && (mismatchesProcessed >= mismatchCount * 0.9);
+            if (mainTx.isMismatch) {
+                mismatchesProcessed++;
+            }
+
+            // Skip creating InternalRecords for "missing" transactions
+            if (shouldSkipRecord) {
+                log.debug("Skipping InternalRecord for transaction {} (will result in MISSING)", mainTx.referenceNumber);
+                continue;
+            }
 
             if (hasSettlementReport) {
                 // Create internal records for mini-transactions (same logic as settlement report CSV)
@@ -306,8 +321,11 @@ public class DemoFileGeneratorServiceImpl implements DemoFileGeneratorService {
                     }
 
                     // Create internal record for this mini-transaction
+                    // Use unique reference that matches the settlement report CSV
+                    String uniqueRef = mainTx.referenceNumber + "-" + String.format("%02d", j + 1);
+
                     InternalRecord record = new InternalRecord();
-                    record.setReferenceNumber(mainTx.referenceNumber);
+                    record.setReferenceNumber(uniqueRef);
                     record.setRrn(mainTx.rrn + "-" + (j + 1));
                     record.setStan(mainTx.stan + String.format("%02d", j + 1));
                     record.setTerminalId(mainTx.terminalId);
@@ -451,11 +469,14 @@ public class DemoFileGeneratorServiceImpl implements DemoFileGeneratorService {
             String miniTerminalId = mainTx.terminalId;
             String miniNarration = String.format("Settlement item %d of %d - %s", i + 1, miniTxCount, mainTx.narration);
 
+            // Include mini-transaction index in reference to make it unique
+            String uniqueRef = mainTx.referenceNumber + "-" + String.format("%02d", i + 1);
+
             csv.append(String.format("%s,%s,%s,%s,%.2f,%.2f,%s,%s,%s\n",
                     mainTx.transactionDate.format(dateFormat),
                     mainTx.transactionDate.format(dateFormat),
                     miniNarration,
-                    mainTx.referenceNumber,  // Same ref as main transaction
+                    uniqueRef,
                     miniDebit,
                     miniCredit,
                     miniRrn,

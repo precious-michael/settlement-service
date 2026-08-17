@@ -21,11 +21,13 @@ import org.settlementservice.settlementservice.services.SelfResolutionService;
 import org.settlementservice.settlementservice.services.SettlementValidationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -49,6 +51,12 @@ public class SelfResolutionServiceImpl implements SelfResolutionService {
 
     @Override
     public int resolve(Long accountId, Long statementId) {
+        return resolveAsync(accountId, statementId).join();
+    }
+
+    @Override
+    @Async("self-resolution")
+    public CompletableFuture<Integer> resolveAsync(Long accountId, Long statementId) {
         List<Transaction> candidates;
         if (accountId != null) {
             candidates = transactionRepository.findByStatusAndAccountId(TransactionStatus.UNRESOLVED, accountId);
@@ -57,6 +65,14 @@ public class SelfResolutionServiceImpl implements SelfResolutionService {
         } else {
             candidates = transactionRepository.findByStatus(TransactionStatus.UNRESOLVED);
         }
+
+        if (candidates.isEmpty()) {
+            log.info("No unresolved transactions to process (accountId={}, statementId={})", accountId, statementId);
+            return CompletableFuture.completedFuture(0);
+        }
+
+        log.info("Self-resolving {} transactions (accountId={}, statementId={})",
+                candidates.size(), accountId, statementId);
 
         int count = 0;
         for (Transaction transaction : candidates) {
@@ -68,7 +84,7 @@ public class SelfResolutionServiceImpl implements SelfResolutionService {
         }
         log.info("Self-resolution complete — resolved {}/{} (accountId={}, statementId={})",
                 count, candidates.size(), accountId, statementId);
-        return count;
+        return CompletableFuture.completedFuture(count);
     }
 
     @Override
@@ -142,10 +158,10 @@ public class SelfResolutionServiceImpl implements SelfResolutionService {
         settlementTransaction.setTransactionDate(transaction.getTransactionDate());
         settlementTransaction.setSettlementDate(transaction.getTransactionDate());
         settlementTransaction.setNarration(transaction.getNarration());
-        settlementTransaction.setTransactionReference(extractOrDefault(matcher, "ref",
-                transaction.getReferenceNumber() != null
-                        ? transaction.getReferenceNumber()
-                        : "AUTO-" + transaction.getId()));
+        // Always use transaction's referenceNumber for self-resolved — most reliable source
+        settlementTransaction.setTransactionReference(transaction.getReferenceNumber() != null
+                ? transaction.getReferenceNumber()
+                : "AUTO-" + transaction.getId());
         settlementTransaction.setRrn(extract(matcher, "rrn"));
         settlementTransaction.setStan(extract(matcher, "stan"));
         settlementTransaction.setTerminalId(extract(matcher, "terminalId"));

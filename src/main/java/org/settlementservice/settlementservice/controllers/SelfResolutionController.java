@@ -2,16 +2,22 @@ package org.settlementservice.settlementservice.controllers;
 
 import lombok.RequiredArgsConstructor;
 import org.settlementservice.settlementservice.dtos.response.SettlementServiceResponse;
+import org.settlementservice.settlementservice.enums.AsyncTaskStatus;
+import org.settlementservice.settlementservice.enums.AsyncTaskType;
+import org.settlementservice.settlementservice.models.AsyncTask;
+import org.settlementservice.settlementservice.repositories.AsyncTaskRepository;
 import org.settlementservice.settlementservice.repositories.ReconciliationFormulaRepository;
 import org.settlementservice.settlementservice.services.SelfResolutionService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
 import java.util.Map;
 
 @RestController
@@ -22,6 +28,7 @@ public class SelfResolutionController {
 
     private final SelfResolutionService selfResolutionService;
     private final ReconciliationFormulaRepository reconciliationFormulaRepository;
+    private final AsyncTaskRepository asyncTaskRepository;
 
     /**
      * Trigger self-resolution. Exactly one scope applies:
@@ -58,7 +65,30 @@ public class SelfResolutionController {
             }
         }
 
-        int count = selfResolutionService.resolve(accountId, statementId);
-        return ResponseEntity.ok(SettlementServiceResponse.success("Self-resolution complete", Map.of("resolved", count)));
+        // Create AsyncTask to track progress
+        AsyncTask task = asyncTaskRepository.save(AsyncTask.builder()
+                .type(AsyncTaskType.SELF_RESOLUTION)
+                .status(AsyncTaskStatus.PROCESSING)
+                .totalRecords(0L) // Will be updated when async method gets count
+                .processedRecords(0L)
+                .startedAt(Instant.now())
+                .build());
+
+        // Submit async self-resolution
+        selfResolutionService.resolveAsync(accountId, statementId)
+                .whenComplete((count, ex) -> {
+                    if (ex != null) {
+                        task.setStatus(AsyncTaskStatus.FAILED);
+                        task.setErrorMessage(ex.getMessage());
+                    } else {
+                        task.setStatus(AsyncTaskStatus.COMPLETED);
+                        task.setProcessedRecords((long) count);
+                        task.setTotalRecords((long) count);
+                    }
+                    task.setCompletedAt(Instant.now());
+                    asyncTaskRepository.save(task);
+                });
+
+        return ResponseEntity.ok(SettlementServiceResponse.success("Self-resolution started", Map.of("taskId", task.getId())));
     }
 }

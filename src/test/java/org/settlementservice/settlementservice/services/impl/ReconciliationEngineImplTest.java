@@ -15,6 +15,7 @@ import org.settlementservice.settlementservice.reconciliation.dtos.Reconciliatio
 import org.settlementservice.settlementservice.enums.ReconciliationStatus;
 import org.settlementservice.settlementservice.models.InternalRecord;
 import org.settlementservice.settlementservice.models.ReconciliationFormula;
+import org.settlementservice.settlementservice.repositories.AsyncTaskRepository;
 import org.settlementservice.settlementservice.repositories.InternalRecordRepository;
 import org.settlementservice.settlementservice.repositories.ReconciliationFormulaRepository;
 import org.settlementservice.settlementservice.reconciliation.services.impl.ReconciliationEngineImpl;
@@ -42,6 +43,7 @@ class ReconciliationEngineImplTest {
     @Mock private InternalRecordRepository internalRecordRepository;
     @Mock private DiscrepancyRepository discrepancyRepository;
     @Mock private ReconciliationFormulaRepository reconciliationFormulaRepository;
+    @Mock private AsyncTaskRepository asyncTaskRepository;
 
     private ReconciliationEngineImpl engine;
 
@@ -52,7 +54,8 @@ class ReconciliationEngineImplTest {
                 settlementReportRepository,
                 internalRecordRepository,
                 discrepancyRepository,
-                reconciliationFormulaRepository);
+                reconciliationFormulaRepository,
+                asyncTaskRepository);
     }
 
     @Test
