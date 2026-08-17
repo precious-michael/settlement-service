@@ -7,8 +7,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDate;
+import java.util.Optional;
 
 public interface TransactionService {
+
+    Optional<TransactionResponse> getById(Long transactionId);
 
     Page<TransactionResponse> search(
             TransactionStatus status,

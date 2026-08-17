@@ -342,7 +342,21 @@ public class DemoFileGeneratorServiceImpl implements DemoFileGeneratorService {
                     count++;
                 }
             } else {
-                // Create single internal record matching the main transaction
+                // Create single internal record for self-resolved transaction
+                // Apply amount mismatch if this transaction is marked as mismatch
+                BigDecimal internalDebit = mainTx.debit;
+                BigDecimal internalCredit = mainTx.credit;
+
+                if (mainTx.isMismatch) {
+                    // Apply mismatch: add small difference (0.50 to 1.50) to the amount
+                    BigDecimal diff = new BigDecimal("0.50").add(new BigDecimal(i % 100).multiply(new BigDecimal("0.01")));
+                    if (mainTx.credit.compareTo(BigDecimal.ZERO) > 0) {
+                        internalCredit = internalCredit.add(diff).setScale(2, RoundingMode.HALF_UP);
+                    } else if (mainTx.debit.compareTo(BigDecimal.ZERO) > 0) {
+                        internalDebit = internalDebit.add(diff).setScale(2, RoundingMode.HALF_UP);
+                    }
+                }
+
                 InternalRecord record = new InternalRecord();
                 record.setReferenceNumber(mainTx.referenceNumber);
                 record.setRrn(mainTx.rrn);
@@ -351,9 +365,9 @@ public class DemoFileGeneratorServiceImpl implements DemoFileGeneratorService {
                 record.setTransactionDate(mainTx.transactionDate);
                 record.setTransactionTime(java.time.LocalTime.of(10, 0).plusMinutes(i * 5));
                 record.setNarration(mainTx.narration);
-                record.setDebit(mainTx.debit);
-                record.setCredit(mainTx.credit);
-                record.setAmount(mainTx.credit.subtract(mainTx.debit).abs());
+                record.setDebit(internalDebit);
+                record.setCredit(internalCredit);
+                record.setAmount(internalCredit.subtract(internalDebit).abs());
                 record.setCurrency("NGN");
                 record.setStatus("SUCCESSFUL");
 

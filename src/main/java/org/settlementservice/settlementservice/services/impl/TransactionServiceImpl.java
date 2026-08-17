@@ -12,12 +12,18 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
 public class TransactionServiceImpl implements TransactionService {
 
     private final TransactionRepository transactionRepository;
+
+    @Override
+    public Optional<TransactionResponse> getById(Long transactionId) {
+        return transactionRepository.findById(transactionId).map(this::toResponse);
+    }
 
     @Override
     public Page<TransactionResponse> search(
