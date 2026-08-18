@@ -586,31 +586,43 @@ Here's how everything connects in a typical scenario:
 - **Impact:** Reduced DB round-trips from ~2000 to ~2 for 1000 transactions
 - **Used In:** BankStatementUploadTask, SettlementReportUploadTask, ReconciliationEngine
 
----
+[//]: # (---)
 
-## Important Gotchas & Edge Cases
+[//]: # ()
+[//]: # (## Important Gotchas & Edge Cases)
 
-1. **Balance Validation Failure** - If opening balance doesn't match previous closing, upload is rejected immediately. Fix: Check account's current openingBalance before uploading.
+[//]: # ()
+[//]: # (1. **Balance Validation Failure** - If opening balance doesn't match previous closing, upload is rejected immediately. Fix: Check account's current openingBalance before uploading.)
 
-2. **Duplicate Upload Detection** - Files are hashed. Re-uploading same file for same account returns 409 Conflict, not 201.
+[//]: # ()
+[//]: # (2. **Duplicate Upload Detection** - Files are hashed. Re-uploading same file for same account returns 409 Conflict, not 201.)
 
-3. **Settlement Amount Tolerance** - Default 0.01. Configure via `reconciliation.tolerance` in application.yml.
+[//]: # ()
+[//]: # (3. **Settlement Amount Tolerance** - Default 0.01. Configure via `reconciliation.tolerance` in application.yml.)
 
-4. **Formula Must Match Account** - Can't use Formula A (for Account 1) when uploading settlement report for Transaction in Account 2.
+[//]: # ()
+[//]: # (4. **Formula Must Match Account** - Can't use Formula A &#40;for Account 1&#41; when uploading settlement report for Transaction in Account 2.)
 
-5. **Self-Resolution Amount Logic** - Uses credit amount if > 0, otherwise uses debit. For transactions with both credit and debit (rare), credit wins.
+[//]: # ()
+[//]: # (5. **Self-Resolution Amount Logic** - Uses credit amount if > 0, otherwise uses debit. For transactions with both credit and debit &#40;rare&#41;, credit wins.)
 
-6. **No Delete for Settlement Banks** - Only deactivation allowed. Prevents orphaned accounts.
+[//]: # ()
+[//]: # (6. **No Delete for Settlement Banks** - Only deactivation allowed. Prevents orphaned accounts.)
 
-7. **Classification Rule Order Matters** - Account-specific rules checked before global. First match wins. Order can affect results.
+[//]: # ()
+[//]: # (7. **Classification Rule Order Matters** - Account-specific rules checked before global. First match wins. Order can affect results.)
 
-8. **Reconciliation Reference Requires Formula** - Settlement transactions without a formula assigned can't be reconciled. Must assign via upload or update endpoint first.
+[//]: # ()
+[//]: # (8. **Reconciliation Reference Requires Formula** - Settlement transactions without a formula assigned can't be reconciled. Must assign via upload or update endpoint first.)
 
-9. **BigDecimal Comparison** - Always uses `.compareTo() == 0`, never `.equals()`. Standard practice for monetary amounts.
+[//]: # ()
+[//]: # (9. **BigDecimal Comparison** - Always uses `.compareTo&#40;&#41; == 0`, never `.equals&#40;&#41;`. Standard practice for monetary amounts.)
 
-10. **JWT Token Expiration** - Tokens expire after configured period. Front-end should handle 401 responses and re-authenticate.
+[//]: # ()
+[//]: # (10. **JWT Token Expiration** - Tokens expire after configured period. Front-end should handle 401 responses and re-authenticate.)
 
----
+[//]: # ()
+[//]: # (---)
 
 ## File References (Quick Jump Links)
 
@@ -659,5 +671,3 @@ The Settlement Service is a complete reconciliation pipeline:
 3. **Resolve** - Match transactions with settlement data (manual or auto)
 4. **Reconcile** - Match settlement data against internal records in parallel
 5. **Review** - Query discrepancies and generate reports
-
-**166 tests passing** | **Parallel processing** | **Fault-tolerant** | **Production-ready**
